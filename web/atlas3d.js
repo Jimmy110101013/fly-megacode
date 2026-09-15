@@ -53,6 +53,18 @@ const MODEL_FAMILIES = new Set(['mushroom', 'central']);
 // Past ~4x the camera sits inside the lobes and the view stops meaning much.
 const ZOOM_MIN = 0.6, ZOOM_MAX = 4;
 
+/** q-th quantile of the first n values (|v| if abs; skipping zeros if nonzero). */
+function percentile(values, n, q, abs = false, nonzero = false) {
+  const tmp = [];
+  for (let i = 0; i < n; i++) {
+    const v = abs ? Math.abs(values[i] ?? 0) : (values[i] ?? 0);
+    if (!nonzero || v > 0) tmp.push(v);
+  }
+  if (!tmp.length) return 0;
+  tmp.sort((a, b) => a - b);
+  return tmp[Math.min(tmp.length - 1, Math.floor(q * tmp.length))];
+}
+
 const SWEEP = 0.45;      // seconds for the wavefront to cross a cell
 const DECAY = 1.15;      // 1/s fade once the wave has passed
 
@@ -68,7 +80,7 @@ uniform vec2 uMemSize;
 uniform float uNLobes;
 uniform float uMemGain;
 uniform vec3 uDop;            // colour of the dopamine population that last fired
-uniform float uMode;          // 0 = activity, 1 = memory
+uniform float uMode;          // 0 = activity, 1 = memory, 2 = working memory
 uniform float uGain;
 uniform float uNear;          // view-space depth of the nearest structure
 uniform float uRange;
@@ -85,6 +97,10 @@ const float BASE_CX = float(${CLASS_ALPHA[4]});
 const vec3 HOT  = vec3(${FIRE_COLOR.join(',')});
 const vec3 HOLD = vec3(${HOLD_COLOR.join(',')});
 const vec3 MEMC = vec3(0.62, 1.0, 0.9);       // a path cell in the memory layer: bright teal
+const vec3 WM_POS = vec3(0.55, 0.95, 1.0);    // working memory: a reservoir cell held above rest
+const vec3 WM_NEG = vec3(1.0, 0.62, 0.36);    // ... and held below it
+const vec3 WRITE  = vec3(1.0, 0.85, 0.36);    // the mushroom body writing in, in its firing yellow
+const vec3 READ   = vec3(1.0, 1.0, 1.0);      // the eight cells read back out
 
 vec4 texel(sampler2D t, vec2 size, float i) {
   return texture2D(t, vec2((mod(i, size.x) + 0.5) / size.x, (floor(i / size.x) + 0.5) / size.y));
@@ -100,8 +116,19 @@ void main() {
   float lit = 0.0;
   if (aCell >= 0.0) {
     vec4 s = texel(uCells, uCellSize, aCell);
-    if (ci == 2) {
-      lit = s.a;                                  // dopamine release, in both layers
+    if (uMode > 1.5) {
+      // Working memory: the reservoir speaks, everything else is context (below).
+      // s.b is the signed state scaled to the largest, s.g the write pulse from the
+      // MBON->CX pathway, s.r marks the cells the mushroom body reads.
+      if (isCX) {
+        float v = s.b;
+        hot = v >= 0.0 ? WM_POS : WM_NEG;
+        lit = abs(v);
+        if (s.g > 0.02) { hot = mix(hot, WRITE, clamp(s.g * 1.5, 0.0, 1.0)); lit = max(lit, s.g); }
+        if (s.r > 0.5) { hot = READ; lit = max(lit, 0.9); a *= 4.0; }
+      }
+    } else if (ci == 2) {
+      lit = s.a;                                  // dopamine release, in activity and memory
       hot = uDop;
     } else if (isCX) {
       lit = uMode > 0.5 ? 0.0 : s.a;              // how much this cell is holding
@@ -135,6 +162,9 @@ void main() {
       lit = aFlow <= s.r + 0.03 ? s.g * (0.34 + 0.66 * lead) : 0.0;
     }
   }
+  // Dimmer than the memory layer's context: 5,177 Kenyon cells at 0.3 still out-glow
+  // the reservoir they sit beside.
+  if (uMode > 1.5 && !isCX) { a *= 0.12; lit = 0.0; }
   vColor = mix(base, hot, clamp(lit * 1.4, 0.0, 1.0));
   vec4 mv = modelViewMatrix * vec4(position, 1.0);
   // Near structures brighter than far ones: without this the projection is a
@@ -666,10 +696,12 @@ export class Atlas3D {
     return this.showContext;
   }
 
-  toggleOverlay() {
-    this.overlay = !this.overlay;
-    this.material.uniforms.uMode.value = this.overlay ? 1 : 0;
-    return this.overlay;
+  /** 0 = activity, 1 = memory, 2 = working memory. One at a time: they share the lines. */
+  setMode(m) {
+    this.mode = m;
+    this.overlay = m === 1;
+    this.material.uniforms.uMode.value = m;
+    return m;
   }
 
   _place() {
@@ -698,9 +730,32 @@ export class Atlas3D {
     if (!this.nCX) return;
     let mx = 1e-6;
     for (let i = 0; i < h.length; i++) mx = Math.max(mx, Math.abs(h[i]));
+    // The working-memory layer scales to the 95th percentile, not the maximum: in the
+    // model only ~8 of 2,875 cells sit above half the largest |h|, so a max scale
+    // shows a handful of cells and leaves the state being held invisible.
+    const p95 = percentile(h, this.nCX, 0.95, true) || mx;
     for (let i = 0; i < this.nCX; i++) {
-      this.cellData[(this.nKCCells + i) * 4 + 3] = Math.abs(h[i] ?? 0) / mx;
+      const v = h[i] ?? 0;
+      this.cellData[(this.nKCCells + i) * 4 + 3] = Math.abs(v) / mx;
+      this.cellData[(this.nKCCells + i) * 4 + 2] = Math.max(-1, Math.min(1, v / p95));
     }
+  }
+
+  /** Mark the cells the mushroom body reads back. Which ones is modelled (hub cells). */
+  setReadouts(indices) {
+    if (!this.nCX) return;
+    for (const i of indices) if (i < this.nCX) this.cellData[(this.nKCCells + i) * 4] = 1;
+  }
+
+  /** How hard the MBON->CX pathway wrote into each reservoir cell on the last step. */
+  cxWrite(drive, t = performance.now() / 1000) {
+    if (!this.nCX || !drive) return;
+    const lv = (this.writeLevel ??= new Float32Array(this.nCX));
+    // Scaled among the cells actually driven (~295 a step), at their 90th percentile:
+    // against the maximum only ~7 of them reach 30%, and the flash is invisible.
+    const p90 = percentile(drive, this.nCX, 0.9, false, true) || 1e-9;
+    for (let i = 0; i < this.nCX; i++) lv[i] = Math.min(1, (drive[i] ?? 0) / p90);
+    this.writeAt = t;
   }
 
   /**
@@ -747,6 +802,12 @@ export class Atlas3D {
         d[(this.danBase + j) * 4 + 3] = this.danPAM[j] === this.dopPAM ? on : 0;
       }
       if (!on) this.dopAt = 0;
+    }
+    if (this.writeAt) {
+      const e = Math.exp(-2.2 * (now - this.writeAt));
+      const on = e > 0.01 ? e : 0;
+      for (let i = 0; i < this.nCX; i++) d[(this.nKCCells + i) * 4 + 1] = this.writeLevel[i] * on;
+      if (!on) this.writeAt = 0;
     }
     this.cellTex.needsUpdate = true;
 

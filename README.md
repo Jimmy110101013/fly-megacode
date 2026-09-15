@@ -117,6 +117,25 @@ fires, and the central complex glows by how much it is holding. Hover a region f
 name and its role in the model, Ctrl/⌘-scroll or pinch to zoom; double-click returns to
 the frontal view.
 
+**Working memory layer.** The third atlas mode shows the central complex alone, the
+mushroom body dimmed to context. Each reservoir cell is coloured by its state, above or
+below rest, scaled to the 95th percentile and capped: scaled to the most active cell,
+only a handful of cells ever showed. On every decision the cells the real MBON→CX
+pathway reaches flash yellow in proportion to how hard they were driven (scaled the same
+way, at the 90th percentile of the driven cells), and the eight
+cells the mushroom body reads back are marked white. Which eight is modelled: they are
+the reservoir's hub cells by in-degree, not an anatomical output. The state clears with
+every new patient.
+
+**Memory tape.** A panel under the rehearsal draws, for the current patient, what those
+eight readouts handed the Kenyon cells at every decision: one row per readout, shaded
+by the level (0–4) the feature space actually encodes, with marks where a shock,
+epinephrine or an antiarrhythmic was given. It is the fly's input, not a smoothed view
+of the reservoir. A finished case stays on the tape until the next patient's first
+decision. Expect the rows to climb together as the case goes on, several nearly
+identical; whatever shock history they hold shows as the smaller differences between
+them.
+
 **Rehearsal.** Below the atlas, one row per starting rhythm (VF, pVT, PEA, asystole),
 each a fixed patient the fly never trains on. Whenever the fly has learned something new,
 it runs that patient again as it is at that moment: greedy, for up to 14 steps, learning

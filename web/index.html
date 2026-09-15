@@ -110,6 +110,10 @@ h1 em{font-style:normal;color:var(--kc)}
 .mem-key b{color:var(--ink);font-weight:600}
 .mem-key .pam{color:var(--pam)}
 .mem-key .ppl1{color:var(--ppl1)}
+.mem-key .above{color:#8cf2ff}
+.mem-key .below{color:#ff9e5c}
+.mem-key .write{color:#f0a93b}
+.cell.tape{grid-column:1/-1;min-height:200px}
 .hint{position:absolute;top:14px;left:50%;transform:translateX(-50%);
       font-family:var(--mono);font-size:10px;color:var(--faint);
       letter-spacing:.08em;pointer-events:none;z-index:2}
@@ -199,6 +203,7 @@ footer .rule{height:1px;background:var(--line);margin:0 0 16px}
       <div class="atlas-ui">
         <button id="a-whole" aria-pressed="false">Whole brain</button>
         <button id="a-overlay" aria-pressed="false">Memory layer</button>
+        <button id="a-wm" aria-pressed="false">Working memory</button>
         <div class="atlas-zoom">
           <button id="a-zoom-out" aria-label="Zoom out">−</button>
           <button id="a-zoom-in" aria-label="Zoom in">＋</button>
@@ -220,12 +225,21 @@ footer .rule{height:1px;background:var(--line);margin:0 0 16px}
         right, <span class="ppl1">PPL1</span> if wrong. Nothing brightens with
         learning: the model has no potentiation.
       </div>
+      <div class="mem-key" id="a-wm-key" hidden>
+        <b>Working memory.</b> The central complex, 2,875 neurons nobody trained, holding
+        this patient's history. Colour is each cell's state, <span class="above">above</span>
+        or <span class="below">below</span> rest; <span class="write">yellow</span> flashes
+        where the real MBON→CX pathway writes in on a decision; <b>white</b> marks the
+        eight cells the mushroom body reads back (which eight is modelled). Clears with
+        each new patient.
+      </div>
       <div class="hemis">
         <span id="a-left">◀ left hemisphere</span>
         <span id="a-right">right hemisphere ▶</span>
       </div>
     </div>
     <div class="cell rehearsal"><canvas id="c-rehearsal"></canvas></div>
+    <div class="cell tape"><canvas id="c-tape"></canvas></div>
     <div class="cell"><canvas id="c-mbon"></canvas></div>
     <div class="cell curve"><canvas id="c-curve"></canvas></div>
   </div>
@@ -299,6 +313,7 @@ import { CentralComplex } from './central-complex.js';
 import { Bay } from './scene3d.js';
 import { BrainView } from './brainview.js';
 import { Rehearsal } from './rehearsal.js';
+import { MemoryTape } from './memory-tape.js';
 import { Atlas3D } from './atlas3d.js';
 
 const $ = (id) => document.getElementById(id);
@@ -367,6 +382,11 @@ const bay = new Bay($('bay'));
 const brain = new BrainView(
   { kcCanvas: null, mbonCanvas: $('c-mbon'), curveCanvas: $('c-curve') }, fly);
 const rehearsal = new Rehearsal($('c-rehearsal'), { fly, cx, cxCircuit, space, Megacode, actions: ACTIONS });
+const tape = new MemoryTape($('c-tape'), {
+  readouts: cx.readout.length,
+  levels: space.groups.find((g) => g.cx === 0)?.channels.length ?? 5,
+});
+let tapeStale = false;
 
 // Traced morphology is a big file and an optional layer: without it the page
 // still runs, it just has nothing anatomical to light up.
@@ -444,6 +464,7 @@ try {
     $('a-whole').style.display = 'none';
   }
   if (!atlas.hasMemory) $('a-overlay').style.display = 'none';
+  if (atlas.nCX) atlas.setReadouts(cx.readout); else $('a-wm').style.display = 'none';
   atlas.mbonHeat = mbonHeat;
   $('a-cells').textContent = atlasData.neurons.length.toLocaleString();
   $('a-segs').textContent = atlas.nSeg.toLocaleString();
@@ -469,6 +490,7 @@ let running = false, acc = 0, stepEvery = 1 / 1.4, sinceStep = 0;
 function newCase() {
   mc = new Megacode(Date.now() + cases * 7919);
   cx.reset();                       // a new patient starts with a clear head
+  tapeStale = true;                 // wiped on the next decision, so a finished case stays readable
   cases++;
   bay.setRhythm(mc.state.rhythm);
   $('s-case').textContent = cases;
@@ -538,9 +560,13 @@ function decide() {
   const feats = space.encode(mc.state, mc.shockable, cx.out);
   const a = fly.decide(feats);
   const trace = fly.last.activeKC;
+  const rhythm = mc.state.rhythm;
   const res = mc.step(a);
+  if (tapeStale) { tape.reset(); tapeStale = false; }
+  tape.record(cx.out, res.action, rhythm);   // what the Kenyon cells were given for this one
   fly.learn(res.correct);
   cx.step(fly.last.learned);        // the fly writes what it just did into its own state
+  atlas?.cxWrite(cx.lastDrive);
 
   record(res.correct);
 
@@ -608,6 +634,7 @@ function frame(now) {
   brain.decay(dt);
   brain.render(history);
   rehearsal.render(dt);
+  tape.render();
 
   const m = fly.last?.mbon;
   if (m) {
@@ -668,13 +695,21 @@ $('a-whole')?.addEventListener('click', (e) => {
   e.target.setAttribute('aria-pressed', String(on));
   e.target.textContent = on ? 'Mushroom body only' : 'Whole brain';
 });
-$('a-overlay')?.addEventListener('click', (e) => {
+// The two layers share the atlas's lines, so they are exclusive: pressing one turns
+// the other off, pressing it again goes back to activity.
+const LAYERS = { 1: ['a-overlay', 'Memory layer', 'a-mem'], 2: ['a-wm', 'Working memory', 'a-wm-key'] };
+const setLayer = (m) => {
   if (!atlas) return;
-  const on = atlas.toggleOverlay();
-  e.target.setAttribute('aria-pressed', String(on));
-  e.target.textContent = on ? 'Memory layer · on' : 'Memory layer';
-  $('a-mem').hidden = !on;
-});
+  atlas.setMode(atlas.mode === m ? 0 : m);
+  for (const [k, [id, name, key]] of Object.entries(LAYERS)) {
+    const on = atlas.mode === Number(k);
+    $(id).setAttribute('aria-pressed', String(on));
+    $(id).textContent = on ? `${name} · on` : name;
+    $(key).hidden = !on;
+  }
+};
+$('a-overlay')?.addEventListener('click', () => setLayer(1));
+$('a-wm')?.addEventListener('click', () => setLayer(2));
 addEventListener('resize', () => bay.resize());
 
 newCase();

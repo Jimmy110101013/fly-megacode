@@ -121,6 +121,10 @@ export class CentralComplex {
     const buf = this.buf;
     buf.fill(0);
     for (let e = 0; e < this.nEdges; e++) buf[this.post[e]] += this.w[e] * this.h[this.pre[e]];
+    // How hard the mushroom body wrote into each cell this step. A trace for the atlas
+    // only; the dynamics below do not read it.
+    const wrote = (this.lastDrive ??= new Float32Array(this.n));
+    wrote.fill(0);
 
     if (mbon && this.nDrive) {
       // The drive pathway was extracted for both hemispheres. A model running on
@@ -131,7 +135,9 @@ export class CentralComplex {
       for (let e = 0; e < this.nDrive; e++) {
         const src = this.dPre[e];
         if (src >= mbon.length) continue;
-        buf[this.dPost[e]] += drive * this.dW[e] * (mbon[src] / mx);
+        const x = drive * this.dW[e] * (mbon[src] / mx);
+        buf[this.dPost[e]] += x;
+        wrote[this.dPost[e]] += Math.abs(x);
       }
     }
     for (let i = 0; i < this.n; i++) {
