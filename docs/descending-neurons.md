@@ -199,13 +199,17 @@ the scan could just be measuring that neurons are lateralised.
 | central complex | 644 | **27.0%** | 275 | 18 / 90 |
 | other central-brain types | 3,341 | **2.0%** | 68 | 4 / 85 |
 
-The raw rate is the comparison that matters, because FDR grows stricter with the
-number of tests and the two rows ran very different numbers. Thirteen-fold. The
-central complex's output onto descending neurons is split by hemisphere far more than
-ordinary central neurons are. Of the 222 strongest splits, 156 cross to the
+The raw rate is the fairer comparison, because FDR grows stricter with the number of
+tests and the two rows ran very different numbers. It does not settle everything: the
+two populations also differ in how many cells reach a given descending pair, and so in
+per-test power, which is why no ratio is quoted here. The direction is not in doubt —
+the central complex's output onto descending neurons is split by hemisphere far more
+often than ordinary central neurons' is. Of the 222 strongest splits, 156 cross to the
 contralateral descending neuron and 66 stay ipsilateral. The hits are concentrated in
 the known premotor output types (PFL1, PFL3, PFR, FR) and the fan-shaped-body columnar
-types (FC, FS); EPG, the compass neurons, also appear, presumably through relays.
+types (FC, FS). EPG, the compass neurons, also appear; that is expected rather than a
+discovery, since EPG feeds PFL3 and its side-split is inherited through the very
+pathway being measured.
 
 **What it is and is not.** This is an opponent structure, and it is exactly the kind
 the descending-neuron line of work lacked — but it is **one axis, left versus right**,
