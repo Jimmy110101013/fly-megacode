@@ -36,6 +36,11 @@ const NEUROPIL = {
   other:     [0.35, 0.38, 0.44],
 };
 
+// Regions that contain what is drawn when the whole brain is off.
+const MODEL_FAMILIES = new Set(['mushroom', 'central']);
+// Past ~4x the camera sits inside the lobes and the view stops meaning much.
+const ZOOM_MIN = 0.6, ZOOM_MAX = 4;
+
 const SWEEP = 0.45;      // seconds for the wavefront to cross a cell
 const DECAY = 1.15;      // 1/s fade once the wave has passed
 
@@ -120,6 +125,9 @@ export class Atlas3D {
     this.renderer.setClearColor(0x05070a, 1);
     this.scene = new THREE.Scene();
     this.camera = new THREE.PerspectiveCamera(32, 1, 1, 20000);
+    this.zoom = 1;
+    this.target = new THREE.Vector3();    // orbit centre; moves when zooming toward the pointer
+    this.raycaster = new THREE.Raycaster();
 
     this._decode();
     this._buildCells(indexOf);
@@ -308,13 +316,22 @@ export class Atlas3D {
 
     this.npGroup = new THREE.Group();
     this.npGroup.visible = false;
+    // Picking keeps its own list rather than raycasting the group: the volumes stay
+    // hidden until the whole brain is switched on, and the mushroom body's own
+    // regions still need names while they are.
+    this.npPick = [];
     for (const [fam, regions] of Object.entries(byFam)) {
       let nv = 0, nf = 0;
       for (const r of regions) { nv += r.nv; nf += r.nf; }
       const pos = new Float32Array(nv * 3);
       const idx = new Uint32Array(nf * 3);
+      const spans = [];
       let vAt = 0, iAt = 0;
       for (const r of regions) {
+        // Families are merged into one mesh, so a hit's face index is mapped back
+        // to its region through these triangle ranges.
+        spans.push({ name: r.name.replace(/_[LR]$/, ''), side: r.side ?? null,
+                     family: fam, f0: iAt / 3, nf: r.nf });
         for (let i = 0; i < r.nv; i++) {
           pos[(vAt + i) * 3] = np.verts[(r.v0 + i) * 3] - c[0];
           pos[(vAt + i) * 3 + 1] = np.verts[(r.v0 + i) * 3 + 1] - c[1];
@@ -336,9 +353,23 @@ export class Atlas3D {
         blending: THREE.AdditiveBlending,
         side: THREE.DoubleSide, depthWrite: false,
       });
-      this.npGroup.add(new THREE.Mesh(g, m));
+      const mesh = new THREE.Mesh(g, m);
+      mesh.userData = { family: fam, spans, color: col };
+      this.npGroup.add(mesh);
+      this.npPick.push(mesh);
     }
     this.scene.add(this.npGroup);
+    // One highlight, re-pointed at whichever region is under the pointer. It shares
+    // the family's buffers and draws only that region's triangle range. Kept faint:
+    // with no depth test every fold of the surface adds, and zoomed in a brighter
+    // value turns the lobe into a solid wall that hides the neurons it names.
+    this.npHi = new THREE.Mesh(new THREE.BufferGeometry(), new THREE.MeshBasicMaterial({
+      transparent: true, opacity: 0.05, blending: THREE.AdditiveBlending,
+      side: THREE.DoubleSide, depthWrite: false, depthTest: false,
+    }));
+    this.npHi.visible = false;
+    this.npHi.frustumCulled = false;
+    this.scene.add(this.npHi);
     // Re-centre so the whole brain is framed when the volumes are shown.
     const b = np.bbox;
     this.npRadius = Math.max(b[3] - b[0], b[4] - b[1], b[5] - b[2]) / 2;
@@ -355,12 +386,13 @@ export class Atlas3D {
     const onDown = (e) => { down = true; px = e.clientX; py = e.clientY; el.setPointerCapture?.(e.pointerId); };
     const onMove = (e) => {
       if (!down) return;
+      this.dragging = true;
       this.theta -= (e.clientX - px) * 0.008;
       this.phi = Math.max(0.08, Math.min(Math.PI - 0.08, this.phi - (e.clientY - py) * 0.008));
       px = e.clientX; py = e.clientY;
       this._place();
     };
-    const onUp = (e) => { down = false; el.releasePointerCapture?.(e.pointerId); };
+    const onUp = (e) => { down = false; this.dragging = false; el.releasePointerCapture?.(e.pointerId); };
     el.addEventListener('pointerdown', onDown);
     el.addEventListener('pointermove', onMove);
     el.addEventListener('pointerup', onUp);
@@ -369,11 +401,156 @@ export class Atlas3D {
     el.style.touchAction = 'none';
   }
 
+  /**
+   * Zoom. The page's scroll wheel is only taken with Ctrl/⌘ held (a trackpad pinch
+   * arrives as exactly that): the panel is most of a screen tall, and a plain wheel
+   * would trap anyone scrolling past it.
+   */
+  enableZoom(onBlockedWheel = null) {
+    if (this._zoomOn) return;
+    this._zoomOn = true;
+    this.canvas.addEventListener('wheel', (e) => {
+      if (!e.ctrlKey && !e.metaKey) { onBlockedWheel?.(); return; }
+      e.preventDefault();
+      // A mouse notch is ~100 px, a pinch a few px per event: clamping keeps one
+      // notch from jumping 3x while leaving a pinch smooth.
+      const px = e.deltaMode === 1 ? e.deltaY * 16 : e.deltaY;
+      const dy = Math.max(-50, Math.min(50, px));
+      this.zoomBy(Math.exp(-dy * 0.008), e.clientX, e.clientY);
+    }, { passive: false });
+    this.canvas.addEventListener('dblclick', () => this.resetZoom());
+  }
+
+  /**
+   * Zooming in anchors on the point under the pointer, so the structure being looked
+   * at stays put. Zooming out walks the centre back home, so reaching 1x always
+   * frames the whole atlas again.
+   */
+  zoomBy(factor, clientX = null, clientY = null) {
+    const next = Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, this.zoom * factor));
+    if (next === this.zoom) return next;
+    if (next > this.zoom && clientX !== null) {
+      const p = this._focalPoint(clientX, clientY);
+      if (p) this.target.lerp(p, 1 - this.zoom / next);
+    } else if (next < this.zoom) {
+      this.target.multiplyScalar(this.zoom > 1 && next > 1 ? (next - 1) / (this.zoom - 1) : 0);
+    }
+    this.zoom = next;
+    this._place();
+    this.onZoom?.(next);
+    return next;
+  }
+
+  resetZoom() {
+    this.zoom = 1;
+    this.target.set(0, 0, 0);
+    this._place();
+    this.onZoom?.(1);
+  }
+
+  /** Where the pointer's ray crosses the plane through the orbit centre. */
+  _focalPoint(clientX, clientY) {
+    const THREE = this.THREE;
+    if (!this._setRay(clientX, clientY)) return null;
+    const n = new THREE.Vector3().subVectors(this.camera.position, this.target).normalize();
+    const plane = new THREE.Plane().setFromNormalAndCoplanarPoint(n, this.target);
+    return this.raycaster.ray.intersectPlane(plane, new THREE.Vector3());
+  }
+
+  _setRay(clientX, clientY) {
+    const r = this.canvas.getBoundingClientRect();
+    if (!r.width || !r.height) return false;
+    this._ndc ??= new this.THREE.Vector2();
+    this._ndc.set(((clientX - r.left) / r.width) * 2 - 1, -((clientY - r.top) / r.height) * 2 + 1);
+    this.camera.aspect = r.width / r.height;
+    this.camera.updateProjectionMatrix();
+    this.camera.updateMatrixWorld();
+    this.raycaster.setFromCamera(this._ndc, this.camera);
+    return true;
+  }
+
+  /**
+   * The neuropil under a screen point, or null. With only the mushroom body and the
+   * central complex drawn, only their regions answer -- otherwise pointing at a lobe
+   * would name whatever larger shell happens to sit in front of it.
+   */
+  pick(clientX, clientY) {
+    if (!this.npPick || !this._setRay(clientX, clientY)) return null;
+    const hits = [];
+    for (const mesh of this.npPick) {
+      if (!this.showContext && !MODEL_FAMILIES.has(mesh.userData.family)) continue;
+      mesh.raycast(this.raycaster, hits);
+    }
+    if (!hits.length) return null;
+    hits.sort((a, b) => a.distance - b.distance);
+    const { object, faceIndex } = hits[0];
+    const span = object.userData.spans.find((s) => faceIndex >= s.f0 && faceIndex < s.f0 + s.nf);
+    return span ? { ...span, mesh: object } : null;
+  }
+
+  /** Light one region's volume, or clear it with null. */
+  highlight(hit) {
+    if (!this.npHi) return;
+    if (!hit) { this.npHi.visible = false; return; }
+    const src = hit.mesh.geometry;
+    let g = hit.mesh.userData.hiGeom;
+    if (!g) {
+      g = new this.THREE.BufferGeometry();
+      g.setAttribute('position', src.getAttribute('position'));
+      g.setIndex(src.getIndex());
+      hit.mesh.userData.hiGeom = g;
+    }
+    g.setDrawRange(hit.f0 * 3, hit.nf * 3);
+    this.npHi.geometry = g;
+    this.npHi.material.color.setRGB(...hit.mesh.userData.color);
+    this.npHi.visible = true;
+  }
+
+  /**
+   * Name the region under the pointer. A mouse gets it on hover; touch has no hover,
+   * so a tap that did not move names it instead.
+   */
+  enablePick(onPick) {
+    if (!this.npPick) return;
+    const el = this.canvas;
+    let queued = null, inside = false, sx = 0, sy = 0;
+    const run = () => {
+      const q = queued;
+      queued = null;
+      if (!inside || !q) return;
+      const hit = this.dragging ? null : this.pick(q.x, q.y);
+      this.highlight(hit);
+      onPick(hit, q.x, q.y);
+    };
+    el.addEventListener('pointermove', (e) => {
+      if (e.pointerType !== 'mouse') return;
+      inside = true;
+      if (!queued) requestAnimationFrame(run);   // at most one raycast a frame
+      queued = { x: e.clientX, y: e.clientY };
+    });
+    el.addEventListener('pointerleave', () => {
+      inside = false;
+      this.highlight(null);
+      onPick(null);
+    });
+    el.addEventListener('pointerdown', (e) => { sx = e.clientX; sy = e.clientY; });
+    el.addEventListener('pointerup', (e) => {
+      if (e.pointerType === 'mouse' || Math.hypot(e.clientX - sx, e.clientY - sy) > 8) return;
+      const hit = this.pick(e.clientX, e.clientY);
+      this.highlight(hit);
+      onPick(hit, e.clientX, e.clientY);
+    });
+  }
+
   setView(v) {
     this.view = v;
     // z is dorsal-ventral and grows toward the calyx, so +z is "up".
     if (v === 'frontal') { this.theta = 0; this.phi = Math.PI / 2; }
     else { this.theta = 0; this.phi = 0.12; }
+    // A preset view is a way home: it frames the whole atlas again.
+    this.zoom = 1;
+    this.target.set(0, 0, 0);
+    this.onZoom?.(1);
     this._place();
   }
 
@@ -392,15 +569,15 @@ export class Atlas3D {
 
   _place() {
     const r = (this.showContext && this.npRadius ? this.npRadius : this.radius);
-    const dist = r / Math.tan((this.camera.fov * Math.PI) / 360) * 0.92;
-    const sp = Math.sin(this.phi), cp = Math.cos(this.phi);
+    const dist = r / Math.tan((this.camera.fov * Math.PI) / 360) * 0.92 / this.zoom;
+    const sp = Math.sin(this.phi), cp = Math.cos(this.phi), t = this.target;
     this.camera.position.set(
-      dist * sp * Math.sin(this.theta),
-      -dist * sp * Math.cos(this.theta),
-      dist * cp,
+      t.x + dist * sp * Math.sin(this.theta),
+      t.y - dist * sp * Math.cos(this.theta),
+      t.z + dist * cp,
     );
     this.camera.up.set(0, 0, 1);
-    this.camera.lookAt(0, 0, 0);
+    this.camera.lookAt(t);
   }
 
   _frame() { this.theta = 0; this.phi = Math.PI / 2; }
@@ -455,7 +632,7 @@ export class Atlas3D {
     }
     this.material.uniforms.uGain.value = this.gain;
     const rad = this.showContext && this.npRadius ? this.npRadius : this.radius;
-    const dist = this.camera.position.length();
+    const dist = this.camera.position.distanceTo(this.target);
     this.material.uniforms.uNear.value = Math.max(1, dist - rad);
     this.material.uniforms.uRange.value = 2 * rad;
     this.renderer.render(this.scene, this.camera);

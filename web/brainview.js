@@ -1,7 +1,8 @@
 /**
  * The fly's brain, drawn from the activity trace the model already produces.
- * Three panels: the Kenyon cell field, the MBON vote, and the learning curve.
- * Nothing here computes anything -- it reads `fly.last` and the run history.
+ * Four panels: the Kenyon cell field, the synapses on the current decision's path,
+ * the MBON vote, and the learning curve. Nothing here computes anything -- it reads
+ * `fly.last`, `fly.w`, `fly.w0` and the run history.
  */
 
 const INK = '#dce5ee';
@@ -31,15 +32,42 @@ const label = (ctx, text, x, y) => {
 };
 
 export class BrainView {
-  constructor({ kcCanvas, mbonCanvas, curveCanvas }, fly) {
+  constructor({ kcCanvas, mbonCanvas, curveCanvas, synCanvas = null }, fly) {
     this.kcCanvas = kcCanvas;
     this.mbonCanvas = mbonCanvas;
     this.curveCanvas = curveCanvas;
+    this.synCanvas = synCanvas;
     this.fly = fly;
     this.heat = new Float32Array(fly.nKC);      // decaying trace per Kenyon cell
     this.danFlash = 0;
     this.danKind = 'PAM';
     this.cols = Math.ceil(Math.sqrt(fly.nKC * 2.1));
+
+    // Synapse panel: MBONs sit on one row per polarity, ordered by type so the
+    // two hemispheres' copies of a compartment land next to each other.
+    const order = (sign) => [...Array(fly.nMBON).keys()]
+      .filter((j) => (fly.mbonSign[j] > 0) === sign)
+      .sort((a, b) => String(fly.circuit.mbon[a].type).localeCompare(String(fly.circuit.mbon[b].type)) || a - b);
+    this.approachRow = order(true);
+    this.avoidRow = order(false);
+    this.mbonSlot = new Float32Array(fly.nMBON);  // position along its row, 0..1
+    const place = (row) => row.forEach((j, i) => { this.mbonSlot[j] = (i + 0.5) / row.length; });
+    place(this.approachRow); place(this.avoidRow);
+    this.syn = null;                              // what the last graded decision did
+  }
+
+  /**
+   * Snapshot the path's weights before the verdict lands, so the panel can show
+   * where this one dose of dopamine went. Must be called before `fly.learn`.
+   */
+  before(activeKC) {
+    const { rowStart, w } = this.fly;
+    let n = 0;
+    for (const k of activeKC) n += rowStart[k + 1] - rowStart[k];
+    const wBefore = new Float32Array(n);
+    let i = 0;
+    for (const k of activeKC) for (let p = rowStart[k]; p < rowStart[k + 1]; p++) wBefore[i++] = w[p];
+    this.syn = { trace: activeKC, wBefore, delta: null, kind: null, valueBefore: this._pathValue(activeKC, wBefore) };
   }
 
   /** Called when the fly commits to an action and gets graded. */
@@ -47,6 +75,34 @@ export class BrainView {
     for (const k of activeKC) this.heat[k] = 1;
     this.danFlash = 1;
     this.danKind = correct ? 'PAM' : 'PPL1';
+
+    const s = this.syn;
+    if (s && s.trace === activeKC) {
+      const { rowStart, w } = this.fly;
+      // Relative depression per synapse, rescaled so this decision's largest is 1.
+      // One event moves a weight by about 1%, which no line width can show; the
+      // flash shows *where* it went, the width shows what has accumulated.
+      s.delta = new Float32Array(s.wBefore.length);
+      let i = 0, mx = 1e-9, touched = 0;
+      for (const k of activeKC) for (let p = rowStart[k]; p < rowStart[k + 1]; p++, i++) {
+        const d = Math.max(0, (s.wBefore[i] - w[p]) / s.wBefore[i]);
+        s.delta[i] = d; if (d > mx) mx = d; if (d > 1e-4) touched++;
+      }
+      for (let j = 0; j < s.delta.length; j++) s.delta[j] /= mx;
+      s.kind = this.danKind;
+      s.touched = touched;
+      s.valueAfter = this._pathValue(activeKC, null);
+    }
+  }
+
+  /** The quantity the decision reads: Σ sign · (w − w0), per Kenyon cell. */
+  _pathValue(activeKC, snapshot) {
+    const { rowStart, colIdx, w, w0, mbonSign } = this.fly;
+    let v = 0, i = 0;
+    for (const k of activeKC) for (let p = rowStart[k]; p < rowStart[k + 1]; p++, i++) {
+      v += mbonSign[colIdx[p]] * ((snapshot ? snapshot[i] : w[p]) - w0[p]);
+    }
+    return v / Math.max(1, activeKC.length);
   }
 
   decay(dt) {
@@ -57,8 +113,114 @@ export class BrainView {
 
   render(history) {
     if (this.kcCanvas) this._kc();
+    if (this.synCanvas) this._syn();
     this._mbon();
     this._curve(history);
+  }
+
+  /*
+   * Every KC->MBON synapse on the path the fly just took, drawn as a line whose
+   * width is w / w0: full at the anatomical weight, thinning as dopamine depresses
+   * it. The atlas does the opposite and never lets thickness carry state, because
+   * there a line is traced neurite and thinning it would read as the anatomy
+   * changing. Here a line is a synaptic weight, which is exactly what learning
+   * changes. Do not unify the two conventions.
+   *
+   * Lines are coloured by the target compartment's *dominant* dopamine input, not
+   * by which dopamine just arrived. Most compartments receive some of both, so a
+   * PPL1 dose thins avoidance lines too, only less. Colouring by the arriving arm
+   * would make the legend look contradicted on a third of the lines.
+   *
+   * There is no potentiation anywhere in the model. A correct answer looks like
+   * strengthening only because it thins the avoidance side of the path.
+   */
+  _syn() {
+    const { ctx, w, h } = fit(this.synCanvas);
+    ctx.clearRect(0, 0, w, h);
+    const fly = this.fly;
+    const trace = fly.last?.activeKC;
+    const pad = 16, top = 58, bottom = h - 30;
+    const yA = top, yV = bottom, yK = (top + bottom) / 2;
+    const span = w - pad * 2;
+    label(ctx, 'Synapses on this path · KC→MBON', pad, 14);
+    if (!trace || !trace.length) return;
+
+    const kcs = [...trace].sort((a, b) => a - b);
+    const kcX = new Map(kcs.map((k, i) => [k, pad + ((i + 0.5) / kcs.length) * span]));
+    const mx = (j) => pad + this.mbonSlot[j] * span;
+    const my = (j) => (fly.mbonSign[j] > 0 ? yA : yV);
+
+    // Bucket by polarity and width so ~1,300 lines cost a couple of dozen strokes.
+    const LEVELS = 8;
+    const buckets = Array.from({ length: LEVELS * 2 }, () => []);
+    const s = this.syn;
+    const flashOn = s && s.trace === trace && s.delta && this.danFlash > 0.02;
+    const glow = Array.from({ length: 5 }, () => []);
+    let sumA = 0, nA = 0, sumV = 0, nV = 0, i = 0;
+    for (const k of trace) {
+      const x0 = kcX.get(k);
+      for (let p = fly.rowStart[k]; p < fly.rowStart[k + 1]; p++, i++) {
+        const j = fly.colIdx[p];
+        const r = Math.min(1, Math.max(0, fly.w[p] / fly.w0[p]));
+        const approach = fly.mbonSign[j] > 0;
+        if (approach) { sumA += r; nA++; } else { sumV += r; nV++; }
+        const lvl = Math.min(LEVELS - 1, Math.floor(r * LEVELS));
+        const seg = [x0, yK, mx(j), my(j)];
+        buckets[(approach ? 0 : LEVELS) + lvl].push(seg);
+        if (flashOn && s.delta[i] > 0.15) glow[Math.min(4, Math.floor(s.delta[i] * 5))].push(seg);
+      }
+    }
+
+    ctx.lineCap = 'round';
+    buckets.forEach((segs, b) => {
+      if (!segs.length) return;
+      const approach = b < LEVELS;
+      const r = ((b % LEVELS) + 0.5) / LEVELS;
+      ctx.strokeStyle = approach ? PPL1 : PAM;
+      ctx.globalAlpha = 0.05 + 0.4 * r * r;
+      ctx.lineWidth = 0.25 + 2.4 * r;
+      ctx.beginPath();
+      for (const [x0, y0, x1, y1] of segs) { ctx.moveTo(x0, y0); ctx.lineTo(x1, y1); }
+      ctx.stroke();
+    });
+    // Where this decision's dopamine landed, brightest where it depressed most.
+    if (flashOn) {
+      ctx.strokeStyle = '#ffffff';
+      glow.forEach((segs, g) => {
+        if (!segs.length) return;
+        ctx.globalAlpha = this.danFlash * (0.08 + 0.14 * g);
+        ctx.lineWidth = 0.6 + 0.5 * g;
+        ctx.beginPath();
+        for (const [x0, y0, x1, y1] of segs) { ctx.moveTo(x0, y0); ctx.lineTo(x1, y1); }
+        ctx.stroke();
+      });
+    }
+    ctx.globalAlpha = 1;
+
+    // Nodes.
+    ctx.fillStyle = AMBER;
+    for (const x of kcX.values()) { ctx.beginPath(); ctx.arc(x, yK, 2.2, 0, 6.283); ctx.fill(); }
+    for (const [row, y, col] of [[this.approachRow, yA, PPL1], [this.avoidRow, yV, PAM]]) {
+      ctx.fillStyle = col;
+      for (const j of row) { ctx.beginPath(); ctx.arc(mx(j), y, 2.6, 0, 6.283); ctx.fill(); }
+    }
+
+    // Row captions and the running balance.
+    ctx.font = '600 9px ui-sans-serif, system-ui, sans-serif';
+    ctx.fillStyle = PPL1;
+    ctx.fillText(`approach MBONs · PPL1-dominant · mean w/w₀ ${(sumA / Math.max(1, nA)).toFixed(2)}`, pad, yA - 10);
+    ctx.fillStyle = PAM;
+    ctx.fillText(`avoidance MBONs · PAM-dominant · mean w/w₀ ${(sumV / Math.max(1, nV)).toFixed(2)}`, pad, yV + 18);
+
+    // Second line, not uppercased: the label style would turn w/w0 into W/W0.
+    ctx.font = '700 10px ui-monospace, monospace';
+    if (flashOn) {
+      ctx.fillStyle = s.kind === 'PAM' ? PAM : PPL1;
+      ctx.fillText(`${s.kind} · ${s.touched.toLocaleString()} depressed · value ${s.valueBefore.toFixed(3)} → ${s.valueAfter.toFixed(3)}`, pad, 30);
+    } else {
+      ctx.fillStyle = MUTED;
+      ctx.fillText(`width = w / w₀ · ${kcs.length} KC · ${i.toLocaleString()} synapses`, pad, 30);
+    }
   }
 
   /* 2,597 Kenyon cells. Roughly 130 of them carry any given decision. */
@@ -89,7 +251,7 @@ export class BrainView {
       }
     }
     ctx.globalAlpha = 1;
-    label(ctx, `Kenyon cells · ${this.fly.nKC} 個 · ${this.fly.kActive} 個放電`, pad, 14);
+    label(ctx, `Kenyon cells · ${this.fly.nKC} · ${this.fly.kActive} firing`, pad, 14);
   }
 
   /* The MBON vote. Compartment owner sets behavioural polarity, not transmitter. */
@@ -127,16 +289,16 @@ export class BrainView {
       ctx.globalAlpha = 1;
     }
 
-    label(ctx, `MBON 投票 · ${n} 個輸出神經元`, pad, 14);
+    label(ctx, `MBON vote · ${n} output neurons`, pad, 14);
     ctx.font = '600 9px ui-sans-serif, system-ui, sans-serif';
-    ctx.fillStyle = PPL1; ctx.fillText('趨近 · PPL1 區間', pad, top - 4);
+    ctx.fillStyle = PPL1; ctx.fillText('approach · PPL1 compartments', pad, top - 4);
     ctx.fillStyle = PAM;
-    ctx.fillText('迴避 · PAM 區間', pad, bottom + 14);
+    ctx.fillText('avoidance · PAM compartments', pad, bottom + 14);
     if (this.danFlash > 0.02) {
       ctx.fillStyle = this.danKind === 'PAM' ? PAM : PPL1;
       ctx.font = '700 10px ui-monospace, monospace';
       ctx.textAlign = 'right';
-      ctx.fillText(`${this.danKind} 多巴胺`, w - pad, top - 4);
+      ctx.fillText(`${this.danKind} dopamine`, w - pad, top - 4);
       ctx.textAlign = 'left';
     }
   }
@@ -163,7 +325,7 @@ export class BrainView {
     ctx.setLineDash([]);
     ctx.fillStyle = MUTED;
     ctx.font = '9px ui-monospace, monospace';
-    ctx.fillText('亂猜 16%', pad + 2, y(chance) - 4);
+    ctx.fillText('chance 16%', pad + 2, y(chance) - 4);
 
     if (history.length > 1) {
       const N = history.length;
@@ -184,6 +346,6 @@ export class BrainView {
       ctx.fillText(`${(last * 100).toFixed(0)}%`, w - pad - 8, y(last) - 8);
       ctx.textAlign = 'left';
     }
-    label(ctx, '近 60 次決策正確率', pad, 14);
+    label(ctx, 'accuracy · last 60 decisions', pad, 14);
   }
 }

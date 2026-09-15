@@ -115,8 +115,9 @@ project — the page, the model, README-level results — go to GitHub, and only
 
 Comments explain *why*, especially why something is the way it is rather than the
 obvious alternative. Several comments in this repo exist to stop a future reader
-re-introducing a bug. Do not strip them. Prose in the README is plain and specific;
-the page's own copy is in Traditional Chinese.
+re-introducing a bug. Do not strip them. Prose in the README is plain and specific.
+The page's own copy is in English, academic and engineering in register, with a little
+dry humour. The humour never makes a claim the README would not.
 
 ## Not a clinical tool
 

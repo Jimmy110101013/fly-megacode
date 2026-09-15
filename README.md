@@ -154,6 +154,19 @@ and the two APL cells — simplified to 642,640 neurite segments.
   into a soft volume, the way a confocal stack does. Off by default: the optic
   lobes dwarf everything else.
 
+Below the atlas, a schematic panel draws every KC→MBON synapse on the path the fly
+just took: Kenyon cells in the middle, approach MBONs above, avoidance MBONs below.
+Here a line *is* a synaptic weight, so its width is w / w₀ and it thins as dopamine
+depresses it. This is the opposite of the atlas rule, deliberately. There a line is
+neurite. A white flash marks where the latest dose of dopamine landed.
+
+There is no potentiation in the model, and the panel does not pretend otherwise.
+A wrong answer recruits PPL1 and thins the path mostly on the approach side. A right
+answer recruits PAM and thins it mostly on the avoidance side, which is what makes a
+correct action look strengthened. "Mostly": most compartments receive some of both
+dopamine populations, so lines are coloured by the target's dominant input, and a
+dose thins the other side too, only less.
+
 Extraction is one pass over 268 million skeleton nodes, about 75 seconds, cached to
 a pickle so the simplification can be retuned without rescanning. The first version
 of that pass did a full array comparison per neuron per batch and would not have

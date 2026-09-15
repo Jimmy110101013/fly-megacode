@@ -128,21 +128,21 @@ export class Megacode {
       case 'shock':
         if (this.shockable) {
           s.shocks++;
-          note = `第 ${s.shocks} 次電擊 · biphasic 依廠商建議（初始 120–200 J）`;
+          note = `Shock ${s.shocks} · biphasic, per manufacturer (initial 120–200 J)`;
         } else {
-          note = `${s.rhythm} 不可電擊 — 電擊無效且中斷按壓`;
+          note = `${s.rhythm} is not shockable: no benefit, and compressions were interrupted`;
         }
         s.phase = 'cpr';
         break;
 
       case 'cpr':
         s.phase = 'cpr';
-        note = '恢復高品質 CPR · 100–120 次/分，充分回彈';
+        note = 'Resume high-quality CPR · 100–120/min, full chest recoil';
         break;
 
       case 'epinephrine':
         s.epiCount++; s.tLastEpi = s.t;
-        note = `腎上腺素 1 mg IV/IO（第 ${s.epiCount} 劑）· 每 3–5 分鐘`;
+        note = `Epinephrine 1 mg IV/IO (dose ${s.epiCount}) · every 3–5 min`;
         s.cprSubsteps++;
         break;
 
@@ -158,35 +158,35 @@ export class Megacode {
 
       case 'access':
         s.access = true;
-        note = '建立 IV 通路（2025：IV 優先，失敗或不可行才用 IO）';
+        note = 'IV access (2025: IV first; IO if IV fails or is not feasible)';
         s.cprSubsteps++;
         break;
 
       case 'airway':
         s.airway = true; s.etco2 += 2;
-        note = '進階氣道 + 連續波形二氧化碳監測 · 有氣道後每 6 秒 1 次呼吸';
+        note = 'Advanced airway + continuous waveform capnography · 1 breath every 6 s once placed';
         s.cprSubsteps++;
         break;
 
       case 'treat_cause':
         s.causeTreated = true;
-        note = `處理可逆原因：${s.cause}`;
+        note = `Treat reversible cause: ${s.cause}`;
         s.cprSubsteps++;
         break;
 
       case 'rhythm_check':
         this._advanceCycle();
-        note = `第 ${s.cycle} 個 2 分鐘週期結束 — 重新評估節律`;
+        note = `End of 2-minute cycle ${s.cycle}: reassess rhythm`;
         break;
 
       case 'post_arrest_care':
         s.over = true;
-        note = 'ROSC — 轉入心跳停止後照護';
+        note = 'ROSC: hand over to post-cardiac arrest care';
         break;
     }
 
     if (action !== 'rhythm_check' && action !== 'post_arrest_care') s.t += 15;
-    if (s.t > 40 * 60 && !s.rosc) { s.over = true; note += ' · 復甦時間已逾 40 分鐘'; }
+    if (s.t > 40 * 60 && !s.rosc) { s.over = true; note += ' · resuscitation past 40 minutes'; }
 
     const entry = { t: s.t, action, correct, note, accepted, rhythm: s.rhythm };
     this.log.push(entry);
@@ -230,8 +230,8 @@ export class Megacode {
     const s = this.s;
     const mm = String(Math.floor(s.t / 60)).padStart(2, '0');
     const ss = String(s.t % 60).padStart(2, '0');
-    return `${mm}:${ss} · ${s.rhythm} · 電擊 ${s.shocks} · Epi ${s.epiCount}` +
-           ` · ${s.access ? 'IV' : '無通路'} · ${s.airway ? '進階氣道' : '無氣道'}` +
+    return `${mm}:${ss} · ${s.rhythm} · shocks ${s.shocks} · epi ${s.epiCount}` +
+           ` · ${s.access ? 'IV' : 'no access'} · ${s.airway ? 'advanced airway' : 'no airway'}` +
            ` · ETCO₂ ${s.etco2}`;
   }
 }

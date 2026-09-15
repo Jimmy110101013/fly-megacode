@@ -1,4 +1,4 @@
-<title>果蠅 Megacode</title>
+<title>Fly Megacode</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,800&family=Newsreader:ital,opsz,wght@0,6..72,300;0,6..72,400;1,6..72,300&family=JetBrains+Mono:wght@400;700&display=swap">
@@ -75,7 +75,13 @@ h1 em{font-style:normal;color:var(--kc)}
 .brain{display:grid;grid-template-columns:1fr 1fr;gap:1px;background:var(--line);
        border-bottom:1px solid var(--line)}
 .cell{background:var(--panel);min-height:186px;position:relative}
-.cell canvas{width:100%;height:100%;display:block}
+/* Out of flow on purpose: an in-flow canvas feeds its backing-store height back into
+   the grid row, the row grows, fit() reads the taller rect, and the panel creeps
+   taller every frame -- the MBON and curve panels reached 93,744 px with the old
+   in-flow rule, before the synapse panel existed. Safe for the WebGL canvases too:
+   atlas3d.js and scene3d.js call setSize(w, h, false), which never writes CSS size. */
+.cell canvas{position:absolute;inset:0;width:100%;height:100%;display:block}
+.cell.syn{grid-column:1/-1;min-height:clamp(230px,30vh,300px)}
 .cell.atlas{grid-column:1/-1;min-height:clamp(340px,52vh,520px);background:#05070a}
 .atlas-ui{position:absolute;top:12px;left:14px;display:flex;flex-direction:column;
           gap:6px;z-index:2}
@@ -86,6 +92,17 @@ h1 em{font-style:normal;color:var(--kc)}
 .atlas-meta{position:absolute;top:12px;right:14px;text-align:right;font-family:var(--mono);
             font-size:10px;color:var(--faint);line-height:1.7;z-index:2}
 .atlas-meta b{color:var(--muted);font-weight:400}
+.atlas-zoom{display:flex;align-items:center;gap:4px;margin-top:4px}
+.atlas-zoom button{width:28px;padding:4px 0;font-size:13px;line-height:1}
+.atlas-zoom span{font-family:var(--mono);font-size:10px;color:var(--faint);margin-left:4px}
+.atlas-tip{position:absolute;z-index:3;pointer-events:none;max-width:260px;
+           padding:7px 10px;border:1px solid var(--line);border-radius:3px;
+           background:rgba(8,11,15,.92);backdrop-filter:blur(6px);font-size:12px;
+           color:var(--ink);line-height:1.45}
+.atlas-tip b{font-weight:600}
+.atlas-tip .ab{font-family:var(--mono);font-size:10px;color:var(--faint);margin-left:6px}
+.atlas-tip .role{margin-top:4px;font-size:11px;color:var(--muted)}
+.hint.nudge{color:var(--ink)}
 .hint{position:absolute;top:14px;left:50%;transform:translateX(-50%);
       font-family:var(--mono);font-size:10px;color:var(--faint);
       letter-spacing:.08em;pointer-events:none;z-index:2}
@@ -132,39 +149,40 @@ footer .rule{height:1px;background:var(--line);margin:0 0 16px}
 <div class="wrap">
   <header>
     <div>
-      <h1>果蠅在跑 <em>Megacode</em></h1>
-      <p class="tag">5,177 個 Kenyon cell 學 AHA 2025 心跳停止演算法，2,875 個中央複合體
-        神經元替牠記住做過什麼。牠只看得到病人身上看得到的東西。</p>
+      <h1>A fly runs the <em>Megacode</em></h1>
+      <p class="tag">5,177 Kenyon cells from a real connectome learn the AHA 2025 cardiac
+        arrest algorithm by trial and error, while 2,875 central-complex neurons keep count.
+        It sees only what a bystander could see. No fly was harmed, or indeed involved.</p>
     </div>
     <div class="stats">
-      <div class="stat"><b id="s-trials">0</b><span>決策次數</span></div>
-      <div class="stat"><b id="s-acc">—</b><span>近期正確率</span></div>
-      <div class="stat"><b id="s-case">0</b><span>場次</span></div>
-      <div class="stat"><b id="s-mass">1.00</b><span>突觸總量</span></div>
-      <div class="stat"><b id="s-cx">0.00</b><span>中央複合體狀態</span></div>
+      <div class="stat"><b id="s-trials">0</b><span>decisions</span></div>
+      <div class="stat"><b id="s-acc">—</b><span>recent accuracy</span></div>
+      <div class="stat"><b id="s-case">0</b><span>megacodes</span></div>
+      <div class="stat"><b id="s-mass">1.00</b><span>synaptic mass</span></div>
+      <div class="stat"><b id="s-cx">0.00</b><span>CX state</span></div>
     </div>
   </header>
 
   <div class="bay">
     <canvas id="bay"></canvas>
-    <div class="loading" id="loading">載入連結體…</div>
+    <div class="loading" id="loading">Loading connectome…</div>
     <div class="hud">
       <div class="clock" id="h-clock">00:00</div>
-      <div class="row"><i>節律</i><span class="rhythm" id="h-rhythm">—</span></div>
-      <div class="row hidden-from-fly"><i>電擊</i><span id="h-shocks">0</span></div>
+      <div class="row"><i>Rhythm</i><span class="rhythm" id="h-rhythm">—</span></div>
+      <div class="row hidden-from-fly"><i>Shocks</i><span id="h-shocks">0</span></div>
       <div class="row hidden-from-fly"><i>Epinephrine</i><span id="h-epi">0</span></div>
-      <div class="row hidden-from-fly"><i>抗心律不整</i><span id="h-anti">—</span></div>
-      <div class="row"><i>靜脈通路</i><span id="h-access">無</span></div>
-      <div class="row"><i>氣道</i><span id="h-airway">無</span></div>
+      <div class="row hidden-from-fly"><i>Antiarrhythmic</i><span id="h-anti">—</span></div>
+      <div class="row"><i>IV access</i><span id="h-access">none</span></div>
+      <div class="row"><i>Airway</i><span id="h-airway">none</span></div>
       <div class="row"><i>ETCO₂</i><span id="h-etco2">—</span></div>
-      <div class="hud-note">灰字是果蠅看不到的——牠得自己記得</div>
+      <div class="hud-note">Greyed rows are hidden from the fly. It has to remember them.</div>
     </div>
   </div>
 
   <div class="verdict">
-    <span class="did" id="v-action">待命</span>
+    <span class="did" id="v-action">Standby</span>
     <span class="mark ok" id="v-mark">—</span>
-    <span class="note" id="v-note">按下開始，先看牠錯一陣子。</span>
+    <span class="note" id="v-note">Press Start and watch it be wrong for a while.</span>
     <span class="should" id="v-should"></span>
   </div>
 
@@ -172,72 +190,93 @@ footer .rule{height:1px;background:var(--line);margin:0 0 16px}
     <div class="cell atlas">
       <canvas id="c-atlas"></canvas>
       <div class="atlas-ui">
-        <button id="a-frontal" aria-pressed="true">正面</button>
-        <button id="a-dorsal" aria-pressed="false">背側</button>
-        <button id="a-whole" aria-pressed="false">加上全腦</button>
-        <button id="a-overlay" aria-pressed="false">記憶疊層</button>
+        <button id="a-frontal" aria-pressed="true">Frontal</button>
+        <button id="a-dorsal" aria-pressed="false">Dorsal</button>
+        <button id="a-whole" aria-pressed="false">Whole brain</button>
+        <button id="a-overlay" aria-pressed="false">Memory overlay</button>
+        <div class="atlas-zoom">
+          <button id="a-zoom-out" aria-label="Zoom out">−</button>
+          <button id="a-zoom-in" aria-label="Zoom in">＋</button>
+          <span id="a-zoom">1.0×</span>
+        </div>
       </div>
+      <div class="atlas-tip" id="a-tip" hidden></div>
       <div class="atlas-meta">
-        <div><b id="a-cells">—</b> 條描繪神經元</div>
-        <div><b id="a-segs">—</b> 段神經突</div>
-        <div>重繪 <b id="a-ms">—</b></div>
-        <div id="a-axes">x = 內外側 · y = 背腹側</div>
-        <div><b id="a-ctx-count">—</b> 個腦區</div>
+        <div><b id="a-cells">—</b> traced neurons</div>
+        <div><b id="a-segs">—</b> neurite segments</div>
+        <div>redraw <b id="a-ms">—</b></div>
+        <div id="a-axes">x = medial–lateral · y = dorsal–ventral</div>
+        <div><b id="a-ctx-count">—</b> neuropils</div>
       </div>
-      <div class="hint" id="a-hint" hidden>拖曳可旋轉</div>
+      <div class="hint" id="a-hint" hidden>drag to orbit · Ctrl/⌘ + wheel or pinch to zoom · double-click to reset</div>
       <div class="hemis">
-        <span id="a-left">◀ 左腦 · 解剖背景</span>
-        <span id="a-right">右腦 · 模型在此 ▶</span>
+        <span id="a-left">◀ left hemisphere</span>
+        <span id="a-right">right hemisphere ▶</span>
       </div>
     </div>
+    <div class="cell syn"><canvas id="c-syn"></canvas></div>
     <div class="cell"><canvas id="c-mbon"></canvas></div>
     <div class="cell curve"><canvas id="c-curve"></canvas></div>
   </div>
 
   <div class="bar">
-    <button class="primary" id="b-run">開始</button>
-    <button id="b-step">單步</button>
-    <button id="b-train">速成訓練 1500 場</button>
-    <button id="b-case">換一場</button>
-    <button id="b-reset">全部忘掉</button>
-    <label class="speed">速度
+    <button class="primary" id="b-run">Start</button>
+    <button id="b-step">Step</button>
+    <button id="b-train">Fast-train 1,500</button>
+    <button id="b-case">New case</button>
+    <button id="b-reset">Forget everything</button>
+    <label class="speed">Speed
       <input type="range" id="b-speed" min="1" max="14" step="1" value="5">
       <span id="b-speedv">1.4/s</span>
     </label>
     <div class="legend">
       <span><i style="background:#3ddbb8"></i>Kenyon cell</span>
-      <span><i style="background:#3bb0f0"></i>PAM · 獎勵</span>
-      <span><i style="background:#ff4d6d"></i>PPL1 · 懲罰</span>
+      <span><i style="background:#3bb0f0"></i>PAM · reward</span>
+      <span><i style="background:#ff4d6d"></i>PPL1 · punishment</span>
       <span><i style="background:#6e96ff"></i>MBON</span>
       <span><i style="background:#ff4d8d"></i>DAN</span>
       <span><i style="background:#b06bff"></i>APL</span>
-      <span><i style="background:#738cae"></i>中央複合體</span>
-      <span><i style="background:#8cf2ff"></i>正在記憶</span>
-      <span><i style="background:#43e08a"></i>監視器</span>
+      <span><i style="background:#738cae"></i>central complex</span>
+      <span><i style="background:#8cf2ff"></i>holding state</span>
+      <span><i style="background:#43e08a"></i>monitor</span>
     </div>
   </div>
 
   <footer>
     <div class="rule"></div>
-    <p><b>果蠅從來沒有被告知正確答案，也沒有人替牠記住做過什麼。</b>牠看到的只有病人身上
-      觀察得到的東西——節律、ETCO₂、有沒有管路、有沒有氣管內管。電擊幾次了、腎上腺素什麼時候
-      給的、第幾個週期，這些是行為紀錄，由牠自己的<b>中央複合體</b>撐住：2,875 個神經元、
-      171,030 條依真實接線與神經傳導物質定號的遞迴連結，由真實的 MBON→CX 路徑驅動。
-      那個迴路裡<b>沒有任何一個權重是訓練出來的</b>——唯一可塑的突觸留在果蠅真的有可塑性的
-      地方，也就是蘑菇體的 KC→MBON。牠對十個可能動作各評一次分，挑一個做下去，做完才知道
-      自己對不對——就這一個 bit，以多巴胺的形式送達。答對徵召 PAM 神經元，答錯徵召 PPL1。</p>
-    <p>臨床正確性完全不經過果蠅。一個依
+    <p><b>The fly is never told the right answer, and nobody keeps count for it.</b> Its
+      input is what a bystander could read off the patient: rhythm, ETCO₂, whether a line and
+      a tube are in. Shocks delivered, time since epinephrine, which cycle this is: those are
+      records of past actions, and they are held in its own <b>central complex</b>, 2,875
+      neurons and 171,030 recurrent connections wired and signed as in the connectome and
+      driven by the real MBON→CX pathway. <b>No weight in that circuit is trained.</b> The
+      only plastic synapses sit where the fly actually has plasticity, KC→MBON in the
+      mushroom body. Each decision, it scores ten candidate actions, commits to one, and only
+      then learns whether it was right: one bit, delivered as dopamine. PAM if correct, PPL1
+      if not.</p>
+    <p><b>Real</b>, from the connectome: every neuron, every synapse, every sign, and the
+      compartment wiring of dopamine onto the output neurons. <b>Modelled</b>: the sensory
+      interface (a clinical state encoded as one-hot channels, since a fly has no eyes for an
+      ECG), the ten-action menu, rate-based dynamics instead of spikes, and a handful of
+      tuned parameters, sparsity foremost. Read it accordingly: this tests what the fly's own
+      learning rule can do inside the fly's own wiring. It does not claim a fly could run a
+      code.</p>
+    <p>Clinical correctness never passes through the fly. A state machine written from the
       <a href="https://cpr.heart.org/en/resuscitation-science/cpr-and-ecc-guidelines/adult-advanced-life-support">AHA
-      2025 成人心跳停止演算法</a>寫成的狀態機負責評分，每次答錯都會在上方顯示正確答案。
-      接線取自 <a href="https://zenodo.org/records/10676866">FlyWire FAFB v783</a>
-      （Dorkenwald 等人），標註與
-      <a href="https://zenodo.org/records/10877326">描繪骨架</a>取自 Schlegel 等人，
-      <i>Nature</i> 2024，皆為 CC BY 4.0。下方圖譜的每一條線都是一顆真實神經元的
-      實際形態；暗的是靜止，放電時整顆細胞亮起。兩側蘑菇體都在模型裡，所以兩邊都會亮。
-      Adenosine 是刻意不放的——它屬於心搏過速演算法，不屬於心跳停止。</p>
-    <p><b>這是神經科學實驗，不是臨床工具。</b>它不能用於病人照護，不是 ACLS 訓練或認證教材，
-      也未經美國心臟協會審閱或背書。真正的臨床依據請以 AHA 出版的指引為準。<br>
-      原始碼與完整方法：<a href="https://github.com/Jimmy110101013/fly-megacode">github.com/Jimmy110101013/fly-megacode</a>（MIT）。</p>
+      2025 adult cardiac arrest algorithm</a> does the grading, and every wrong answer shows
+      the expected one above. Wiring is from
+      <a href="https://zenodo.org/records/10676866">FlyWire FAFB v783</a> (Dorkenwald et
+      al.); annotations and <a href="https://zenodo.org/records/10877326">traced skeletons</a>
+      from Schlegel et al., <i>Nature</i> 2024, all CC BY 4.0. Every line in the atlas is the
+      traced morphology of a real neuron, dim at rest and lit when it fires. Both mushroom
+      bodies are in the model, so both light up. Adenosine is left out on purpose: it belongs
+      to the tachycardia algorithm, and this patient has bigger problems.</p>
+    <p><b>This is a neuroscience experiment, not a clinical tool.</b> It is not for patient
+      care, not ACLS training or certification material, and not reviewed or endorsed by the
+      American Heart Association. The clinical authority is the AHA's published guidelines,
+      not a simulated insect.<br>
+      Source and full methods:
+      <a href="https://github.com/Jimmy110101013/fly-megacode">github.com/Jimmy110101013/fly-megacode</a> (MIT).</p>
   </footer>
 </div>
 
@@ -258,10 +297,39 @@ const viewportWidth = () =>
   Math.max(document.documentElement?.clientWidth || 0, window.innerWidth || 0) || 1024;
 
 const PRETTY = {
-  shock:'電擊去顫', cpr:'胸外按壓', epinephrine:'Epinephrine 1 mg',
-  amiodarone:'Amiodarone', lidocaine:'Lidocaine', access:'建立靜脈通路',
-  airway:'進階氣道', treat_cause:'處理可逆原因',
-  rhythm_check:'檢查節律', post_arrest_care:'復甦後照護',
+  shock:'Defibrillate', cpr:'Chest compressions', epinephrine:'Epinephrine 1 mg',
+  amiodarone:'Amiodarone', lidocaine:'Lidocaine', access:'Establish IV access',
+  airway:'Advanced airway', treat_cause:'Treat reversible cause',
+  rhythm_check:'Rhythm check', post_arrest_care:'Post-arrest care',
+};
+
+// Neuropil names for the atlas tooltip, JFRC2 / Ito et al. 2014 nomenclature.
+const REGION = {
+  AL:'Antennal lobe', LH:'Lateral horn',
+  LA:'Lamina', ME:'Medulla', AME:'Accessory medulla', LO:'Lobula', LOP:'Lobula plate',
+  AMMC:'Antennal mechanosensory and motor center',
+  CAN:'Cantle', FLA:'Flange', GNG:'Gnathal ganglia', PRW:'Prow', SAD:'Saddle',
+  AOTU:'Anterior optic tubercle', BU:'Bulb', GA:'Gall', LAL:'Lateral accessory lobe',
+  ATL:'Antler', CRE:'Crepine', IB:'Inferior bridge', ICL:'Inferior clamp',
+  SCL:'Superior clamp',
+  AVLP:'Anterior ventrolateral protocerebrum', PVLP:'Posterior ventrolateral protocerebrum',
+  PLP:'Posterior lateral protocerebrum', WED:'Wedge',
+  EB:'Ellipsoid body', FB:'Fan-shaped body', NO:'Noduli', PB:'Protocerebral bridge',
+  EPA:'Epaulette', GOR:'Gorget', IPS:'Inferior posterior slope',
+  SPS:'Superior posterior slope', VES:'Vest',
+  MB_CA:'Mushroom body calyx', MB_PED:'Mushroom body pedunculus',
+  MB_VL:'Mushroom body vertical lobe', MB_ML:'Mushroom body medial lobe',
+  OCG:'Ocellar ganglion',
+  SIP:'Superior intermediate protocerebrum', SLP:'Superior lateral protocerebrum',
+  SMP:'Superior medial protocerebrum',
+};
+// What each region does in this model, where it does anything.
+const REGION_ROLE = {
+  MB_CA:'Kenyon cell dendrites. The fly receives odour input here; the model feeds it a clinical state instead (modelled).',
+  MB_PED:'Kenyon cell axon bundle, running to the vertical and medial lobes.',
+  MB_VL:'KC→MBON synapses: the only plastic synapses in the entire model.',
+  MB_ML:'KC→MBON synapses: the only plastic synapses in the entire model.',
+  CX:'Central complex: a fixed, untrained reservoir holding the resuscitation history.',
 };
 
 const circuit = await (await fetch('./mb_circuit.json')).json();
@@ -285,7 +353,7 @@ const fly = new MushroomBody(circuit, space.FEATURES.length, ACTIONS.length,
 const cx = new CentralComplex(cxCircuit, { readouts: 8, seed: 11 });
 const bay = new Bay($('bay'));
 const brain = new BrainView(
-  { kcCanvas: null, mbonCanvas: $('c-mbon'), curveCanvas: $('c-curve') }, fly);
+  { kcCanvas: null, mbonCanvas: $('c-mbon'), curveCanvas: $('c-curve'), synCanvas: $('c-syn') }, fly);
 
 // Traced morphology is a big file and an optional layer: without it the page
 // still runs, it just has nothing anatomical to light up.
@@ -313,7 +381,41 @@ try {
   // preset views instead.
   if (viewportWidth() >= 760) {
     atlas.enableRotate();
+    // A plain wheel keeps scrolling the page; say how to zoom instead of eating it.
+    let nudge = 0;
+    atlas.enableZoom(() => {
+      const h = $('a-hint');
+      h.textContent = 'hold Ctrl/⌘ while scrolling to zoom';
+      h.classList.add('nudge');
+      clearTimeout(nudge);
+      nudge = setTimeout(() => {
+        h.textContent = 'drag to orbit · Ctrl/⌘ + wheel or pinch to zoom · double-click to reset';
+        h.classList.remove('nudge');
+      }, 1600);
+    });
     $('a-hint').hidden = false;
+  }
+  // The buttons work everywhere, including phones that get no wheel or drag.
+  atlas.onZoom = (z) => { $('a-zoom').textContent = z.toFixed(1) + '×'; };
+  $('a-zoom-in').addEventListener('click', () => atlas.zoomBy(1.4));
+  $('a-zoom-out').addEventListener('click', () => atlas.zoomBy(1 / 1.4));
+  if (npData) {
+    const tip = $('a-tip');
+    const panel = document.querySelector('.cell.atlas');
+    atlas.enablePick((hit, x, y) => {
+      if (!hit) { tip.hidden = true; return; }
+      const name = REGION[hit.name] ?? hit.name;
+      const side = hit.side === 'L' ? 'left' : hit.side === 'R' ? 'right' : 'midline';
+      const role = REGION_ROLE[hit.name] ?? (hit.family === 'central' ? REGION_ROLE.CX : '');
+      tip.innerHTML = `<b>${name}</b><span class="ab">${hit.name} · ${side}</span>` +
+        (role ? `<div class="role">${role}</div>` : '');
+      tip.hidden = false;
+      const r = panel.getBoundingClientRect();
+      const left = Math.min(x - r.left + 14, r.width - tip.offsetWidth - 8);
+      const top = Math.min(y - r.top + 16, r.height - tip.offsetHeight - 8);
+      tip.style.left = Math.max(8, left) + 'px';
+      tip.style.top = Math.max(8, top) + 'px';
+    });
   }
   if (npData) {
     $('a-ctx-count').textContent = npData.regions.length.toLocaleString();
@@ -331,11 +433,11 @@ try {
   document.querySelector('.atlas-ui').style.display = 'none';
   $('a-left').textContent = '';
   $('a-right').textContent = '';
-  document.querySelector('.atlas-meta').textContent = '傳統形態資料未載入';
+  document.querySelector('.atlas-meta').textContent = 'traced morphology not loaded';
 }
 if (atlas) {
-  $('a-left').textContent = `\u25c0 \u5de6\u8166 ${(atlas.counts[0] ?? 0).toLocaleString()} \u9846`;
-  $('a-right').textContent = `\u53f3\u8166 ${(atlas.counts[1] ?? 0).toLocaleString()} \u9846 \u25b6`;
+  $('a-left').textContent = `◀ left hemisphere · ${(atlas.counts[0] ?? 0).toLocaleString()} cells`;
+  $('a-right').textContent = `right hemisphere · ${(atlas.counts[1] ?? 0).toLocaleString()} cells ▶`;
 }
 $('loading').remove();
 
@@ -395,7 +497,7 @@ async function fastTrain(n = 1500, sliceMs = 28, budgetMs = Infinity) {
       }
       cases++; done++;
     }
-    btn.textContent = `訓練中… ${Math.round((done / n) * 100)}%`;
+    btn.textContent = `Training… ${Math.round((done / n) * 100)}%`;
     $('s-trials').textContent = decisions.toLocaleString();
     $('s-acc').textContent = Math.round(acc * 100) + '%';
     $('s-case').textContent = cases.toLocaleString();
@@ -403,11 +505,11 @@ async function fastTrain(n = 1500, sliceMs = 28, budgetMs = Infinity) {
     $('s-cx').textContent = cx.energy().toFixed(2);
     await new Promise((r) => setTimeout(r, 0));
   }
-  btn.textContent = '再訓練 1500 場';
+  btn.textContent = 'Train 1,500 more';
   btn.disabled = false;
   newCase();
   running = wasRunning || true;
-  $('b-run').textContent = '暫停';
+  $('b-run').textContent = 'Pause';
 }
 
 function decide() {
@@ -415,6 +517,7 @@ function decide() {
   const feats = space.encode(mc.state, mc.shockable, cx.out);
   const a = fly.decide(feats);
   const trace = fly.last.activeKC;
+  brain.before(trace);              // snapshot the path before the dopamine lands
   const res = mc.step(a);
   fly.learn(res.correct);
   cx.step(fly.last.learned);        // the fly writes what it just did into its own state
@@ -434,10 +537,10 @@ function paint(res) {
   $('v-action').textContent = PRETTY[res.action] ?? res.action;
   const mark = $('v-mark');
   mark.className = 'mark ' + (res.correct ? 'ok' : 'no');
-  mark.textContent = res.correct ? 'PAM · 獎勵' : 'PPL1 · 懲罰';
+  mark.textContent = res.correct ? 'PAM · reward' : 'PPL1 · punishment';
   $('v-note').textContent = res.note;
   $('v-should').innerHTML = res.correct ? ''
-    : '演算法要的是 <b>' + res.accepted.map((i) => PRETTY[ACTIONS[i]]).join(' / ') + '</b>';
+    : 'the algorithm wanted <b>' + res.accepted.map((i) => PRETTY[ACTIONS[i]]).join(' / ') + '</b>';
 
   $('h-clock').textContent =
     String(Math.floor(s.t / 60)).padStart(2, '0') + ':' + String(s.t % 60).padStart(2, '0');
@@ -446,8 +549,8 @@ function paint(res) {
   $('h-epi').textContent = s.epiCount;
   $('h-anti').textContent = s.antiarrhythmicDoses
     ? `${s.antiarrhythmicDrug} ×${s.antiarrhythmicDoses}` : '—';
-  $('h-access').textContent = s.access ? 'IV' : '無';
-  $('h-airway').textContent = s.airway ? 'ETT' : '無';
+  $('h-access').textContent = s.access ? 'IV' : 'none';
+  $('h-airway').textContent = s.airway ? 'ETT' : 'none';
   $('h-etco2').textContent = s.etco2 + ' mmHg';
 
   $('s-trials').textContent = decisions.toLocaleString();
@@ -508,7 +611,7 @@ function frame(now) {
 
 $('b-run').onclick = (e) => {
   running = !running;
-  e.target.textContent = running ? '暫停' : '開始';
+  e.target.textContent = running ? 'Pause' : 'Start';
 };
 $('b-step').onclick = () => decide();
 $('b-case').onclick = () => newCase();
@@ -519,11 +622,11 @@ $('b-reset').onclick = () => {
   fly.w.set(fresh.w); fly.trials = 0;
   cx.reset();
   decisions = 0; recent = []; history = []; acc = 0; sinceSample = 0;
-  $('b-train').textContent = '速成訓練 1500 場';
-  $('v-action').textContent = '待命';
-  $('v-note').textContent = '突觸回到解剖基線。按開始，從零看牠學。';
+  $('b-train').textContent = 'Fast-train 1,500';
+  $('v-action').textContent = 'Standby';
+  $('v-note').textContent = 'Synapses restored to anatomical baseline. Press Start to watch it learn from scratch.';
   $('v-should').textContent = '';
-  running = false; $('b-run').textContent = '開始';
+  running = false; $('b-run').textContent = 'Start';
   $('s-trials').textContent = '0'; $('s-acc').textContent = '—';
   newCase();
 };
@@ -537,7 +640,7 @@ const setView = (v) => {
   if (!atlas) return;
   atlas.setView(v);
   $('a-axes').textContent = v === 'frontal'
-    ? 'x = 內外側 · y = 背腹側' : 'x = 內外側 · y = 前後側';
+    ? 'x = medial–lateral · y = dorsal–ventral' : 'x = medial–lateral · y = anterior–posterior';
   $('a-frontal').setAttribute('aria-pressed', String(v === 'frontal'));
   $('a-dorsal').setAttribute('aria-pressed', String(v === 'dorsal'));
 };
@@ -547,13 +650,13 @@ $('a-whole')?.addEventListener('click', (e) => {
   if (!atlas) return;
   const on = atlas.toggleContext();
   e.target.setAttribute('aria-pressed', String(on));
-  e.target.textContent = on ? '只看蘑菇體' : '加上全腦';
+  e.target.textContent = on ? 'Mushroom body only' : 'Whole brain';
 });
 $('a-overlay')?.addEventListener('click', (e) => {
   if (!atlas) return;
   const on = atlas.toggleOverlay();
   e.target.setAttribute('aria-pressed', String(on));
-  e.target.textContent = on ? '記憶疊層 · 開' : '記憶疊層';
+  e.target.textContent = on ? 'Memory overlay · on' : 'Memory overlay';
 });
 addEventListener('resize', () => bay.resize());
 
@@ -563,8 +666,8 @@ requestAnimationFrame(frame);
 
 // Open on a fly that already knows the algorithm: the result is what it does,
 // not the first thousand mistakes. "Forget everything" replays the learning.
-$('v-note').textContent = '正在讓果蠅跑完 900 場 megacode…';
+$('v-note').textContent = 'Putting the fly through 900 megacodes before you arrive…';
 await fastTrain(900, 110, 18000);  // big slices (a hidden tab clamps every yield), hard cap
 
-$('v-note').textContent = '這隻果蠅已經跑過 900 場，而且是自己記住做過什麼的。按「全部忘掉」可以從零看牠重學。';
+$('v-note').textContent = 'This fly has run 900 megacodes and kept its own count. "Forget everything" makes it start over.';
 </script>
