@@ -4,9 +4,10 @@ Input   data/raw/sk_lod1_783.parquet   Schlegel et al. 2024, Zenodo 10877326, CC
         data/raw/annotations.tsv
 Output  data/out/atlas.json            polylines for both hemispheres, quantised
 
-Both hemispheres are extracted. Only the right one is wired into the model, so the
-left is drawn as dim anatomical context and never reacts -- showing it lit would
-imply it computes.
+Both hemispheres are extracted and both are wired into the model, so both light up.
+An earlier version used the right hemisphere alone and drew the left as dim
+anatomical context that never reacted, because showing it lit would have implied
+it computes; `more-brain.mjs` measures what the second one is actually worth.
 """
 import json, pickle, sys
 from collections import defaultdict
