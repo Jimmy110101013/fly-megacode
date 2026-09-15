@@ -218,6 +218,30 @@ a ten-way action selector, and nothing here shows that mushroom-body valence ent
 It is wiring, with predicted transmitters and no gap junctions or receptors. What it
 does establish is where in this connectome a push-pull output stage actually is.
 
+### Does the mushroom body's valence reach it?
+
+That is what decides whether this stage matters for the megacode, and until it was
+measured "no evidence" was an untested absence. `pipeline/cx-valence.py` takes the 18
+side-split CX types from the scan (541 cells, not re-selected) and asks whether
+approach-group and avoidance-group MBONs reach them differently. Null: MBON valence
+shuffled across the 35 MBON types, 5,000 times; four tests, Bonferroni 0.0125.
+
+The side-split cells are 18.8% of the central complex but receive **6.4%** of the
+direct MBON→CX drive. Mushroom-body output largely lands elsewhere.
+
+| pathway | statistic | measured | shuffled mean | p |
+| --- | --- | --- | --- | --- |
+| direct MBON→CX | segregation (approach vs avoidance reach different cells) | 0.779 | 0.648 | 0.18 |
+| direct MBON→CX | lateral (valence difference lines up with left/right) | 0.027 | 0.035 | 0.73 |
+| + one CX→CX hop | segregation | 0.434 | 0.464 | 0.58 |
+| + one CX→CX hop | lateral | 0.014 | 0.029 | 0.79 |
+
+Nothing. The push-pull stage is there, but at one recurrent hop the mushroom body's
+approach/avoidance signal neither favours it nor divides across it. So the structure
+that would let a learned valence choose between outputs exists in this connectome —
+and the learned valence does not visibly feed it. A deeper, recurrent route through
+the fan-shaped body is not excluded.
+
 ## Scripts
 
 ```
@@ -231,5 +255,6 @@ pipeline/dn-opponent.py       search for descending neurons that read the valenc
 pipeline/extract_cx_out.py    central complex -> descending neurons, direct and via one relay
 pipeline/cx-opponent.py       hemisphere opponency in CX output, gated on the PFL3 positive control
 pipeline/lateral-control.py   the same metric on non-CX central types, as the negative control
+pipeline/cx-valence.py        does mushroom-body valence reach the side-split CX cells?
 web/descending.js             the output pathway, fixed or plastic
 ```
