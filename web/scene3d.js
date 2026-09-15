@@ -488,6 +488,11 @@ export class Bay {
     const w = Math.max(1, r.width), h = Math.max(1, r.height);
     this.renderer.setSize(w, h, false);
     this.camera.aspect = w / h;
+    // The bay is framed for a wide strip. In a narrower box keep the horizontal field
+    // of view instead of the vertical one, or the bed and the fly are cut at the sides.
+    const REF_ASPECT = 1.6, VFOV = 37;
+    const t = Math.tan((VFOV * Math.PI) / 360) * Math.max(1, REF_ASPECT / this.camera.aspect);
+    this.camera.fov = (Math.atan(t) * 360) / Math.PI;
     this.camera.updateProjectionMatrix();
   }
 }

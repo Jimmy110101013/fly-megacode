@@ -20,13 +20,13 @@ body{margin:0;background:var(--ground);color:var(--ink);font-family:var(--body);
 .wrap{display:flex;flex-direction:column;min-height:100vh;max-width:1560px;margin:0 auto}
 
 /* ---- header ---- */
-header{display:flex;flex-wrap:wrap;align-items:flex-end;gap:10px 28px;
-       padding:20px 26px 14px;border-bottom:1px solid var(--line)}
-h1{font-family:var(--display);font-weight:800;font-size:clamp(23px,3.1vw,34px);
+header{display:flex;flex-wrap:wrap;align-items:flex-end;gap:8px 28px;
+       padding:14px 22px 10px;border-bottom:1px solid var(--line)}
+h1{font-family:var(--display);font-weight:800;font-size:clamp(22px,2.6vw,30px);
    letter-spacing:-.02em;margin:0;line-height:1;text-wrap:balance}
 h1 em{font-style:normal;color:var(--kc)}
 .tag{font-family:var(--body);font-style:italic;font-weight:300;color:var(--muted);
-     font-size:14px;max-width:46ch;margin:0}
+     font-size:14px;max-width:72ch;margin:0}
 .stats{display:flex;gap:22px;margin-left:auto;flex-wrap:wrap}
 .stat{display:flex;flex-direction:column;gap:1px}
 .stat b{font-family:var(--mono);font-weight:700;font-size:19px;
@@ -37,27 +37,28 @@ h1 em{font-style:normal;color:var(--kc)}
 /* ---- bay ---- */
 .bay{position:relative;height:clamp(300px,52vh,560px);background:var(--ground)}
 .bay canvas{width:100%;height:100%;display:block}
-.hud{position:absolute;top:14px;right:16px;display:flex;flex-direction:column;gap:6px;
-     padding:11px 13px;background:rgba(9,13,18,.82);border:1px solid var(--line);
-     border-radius:3px;font-family:var(--mono);font-size:11px;min-width:168px;
-     backdrop-filter:blur(7px)}
-.hud .row{display:flex;justify-content:space-between;gap:14px;
-          font-variant-numeric:tabular-nums}
+.hud{position:absolute;top:10px;right:10px;display:grid;
+     grid-template-columns:repeat(4,auto);gap:3px 10px;align-items:baseline;
+     padding:7px 10px;background:rgba(9,13,18,.82);border:1px solid var(--line);
+     border-radius:3px;font-family:var(--mono);font-size:10px;backdrop-filter:blur(7px)}
+/* display:contents keeps one element per field while the grid packs two per line. */
+.hud .row{display:contents}
 .hud .row i{font-style:normal;color:var(--faint)}
-.hud .clock{font-size:23px;font-weight:700;letter-spacing:-.02em;color:var(--ecg);
-            line-height:1.1;margin-bottom:2px}
+.hud .row span{text-align:right;font-variant-numeric:tabular-nums}
+.hud .clock{grid-column:1/-1;font-size:16px;font-weight:700;letter-spacing:-.02em;
+            color:var(--ecg);line-height:1.1}
 .hud .rhythm{font-weight:700;color:var(--ecg)}
-.hud .hidden-from-fly{opacity:.45}
-.hud .hud-note{margin-top:5px;padding-top:5px;border-top:1px solid var(--line);
-               font-size:9px;color:var(--faint);line-height:1.4}
+/* Opacity has no effect on a display:contents box, so it goes on the children. */
+.hud .hidden-from-fly > *{opacity:.45}
+.hud .hud-note{grid-column:1/-1;font-size:9px;color:var(--faint);line-height:1.3}
 .loading{position:absolute;inset:0;display:grid;place-items:center;
          font-family:var(--mono);font-size:12px;color:var(--muted);
          background:var(--ground);z-index:3}
 
 /* ---- verdict strip ---- */
-.verdict{display:flex;align-items:center;gap:16px;padding:11px 26px;
-         border-block:1px solid var(--line);background:var(--panel);min-height:58px}
-.did{font-family:var(--display);font-weight:800;font-size:17px;letter-spacing:-.01em;
+.verdict{display:flex;align-items:center;gap:14px;padding:8px 22px;
+         border-block:1px solid var(--line);background:var(--panel);min-height:46px}
+.did{font-family:var(--display);font-weight:800;font-size:16px;letter-spacing:-.01em;
      white-space:nowrap}
 .mark{font-family:var(--mono);font-weight:700;font-size:11px;padding:3px 9px;
       border-radius:2px;letter-spacing:.06em;white-space:nowrap}
@@ -71,6 +72,20 @@ h1 em{font-style:normal;color:var(--kc)}
         white-space:nowrap}
 .should b{color:var(--ecg);font-weight:400}
 
+/* ---- stage: the bay beside the atlas ---- */
+/* Side by side on a desktop, so a decision and the neurons behind it are on screen at
+   once; stacked below that, bay first. */
+.stage{display:grid;grid-template-columns:minmax(0,1fr);border-bottom:1px solid var(--line)}
+.stage-left{display:flex;flex-direction:column;min-width:0}
+@media (min-width:1100px){
+  .stage{grid-template-columns:minmax(0,1fr) minmax(0,1.15fr);
+         height:clamp(560px,calc(100vh - var(--head,80px)),900px)}
+  .stage .bay{height:auto;flex:1 1 0;min-height:0}
+  .stage .cell.atlas{min-height:0;border-left:1px solid var(--line)}
+  .stage .bar button{padding:6px 11px}
+  .stage .bar input[type=range]{width:84px}
+}
+
 /* ---- brain ---- */
 .brain{display:grid;grid-template-columns:1fr 1fr;gap:1px;background:var(--line);
        border-bottom:1px solid var(--line)}
@@ -82,7 +97,7 @@ h1 em{font-style:normal;color:var(--kc)}
    atlas3d.js and scene3d.js call setSize(w, h, false), which never writes CSS size. */
 .cell canvas{position:absolute;inset:0;width:100%;height:100%;display:block}
 .cell.rehearsal{grid-column:1/-1;min-height:260px}
-.cell.atlas{grid-column:1/-1;min-height:clamp(340px,52vh,520px);background:#05070a}
+.cell.atlas{min-height:clamp(340px,52vh,520px);background:#05070a}
 .atlas-ui{position:absolute;top:12px;left:14px;display:flex;flex-direction:column;
           gap:6px;z-index:2}
 .atlas-ui button{font-size:11px;padding:5px 11px;background:rgba(14,19,25,.85);
@@ -103,7 +118,7 @@ h1 em{font-style:normal;color:var(--kc)}
 .atlas-tip .ab{font-family:var(--mono);font-size:10px;color:var(--faint);margin-left:6px}
 .atlas-tip .role{margin-top:4px;font-size:11px;color:var(--muted)}
 .hint.nudge{color:var(--ink)}
-.mem-key{position:absolute;left:14px;bottom:34px;max-width:min(340px,calc(100% - 28px));
+.mem-key{position:absolute;left:14px;bottom:62px;max-width:min(340px,calc(100% - 28px));
          z-index:2;font-size:11px;line-height:1.5;color:var(--muted);
          padding:7px 10px;border:1px solid var(--line);border-radius:3px;
          background:rgba(8,11,15,.82);backdrop-filter:blur(6px)}
@@ -113,16 +128,21 @@ h1 em{font-style:normal;color:var(--kc)}
 .mem-key .above{color:#8cf2ff}
 .mem-key .below{color:#ff9e5c}
 .mem-key .write{color:#f0a93b}
-.cell.tape{grid-column:1/-1;min-height:200px}
-.hint{position:absolute;top:14px;left:50%;transform:translateX(-50%);
+/* A megacode is at most 60 decisions, so the tape shares a row with the MBON vote and
+   the accuracy curve, which only grows, gets the full width. */
+.cell.tape{min-height:200px}
+.cell.curve{grid-column:1/-1}
+/* Under the counts, right-aligned: centred at the top it wrapped into them once the
+   atlas became a half-width column. */
+.hint{position:absolute;top:50px;right:14px;white-space:nowrap;
       font-family:var(--mono);font-size:10px;color:var(--faint);
-      letter-spacing:.08em;pointer-events:none;z-index:2}
+      letter-spacing:.04em;pointer-events:none;z-index:2}
 .hemis{position:absolute;bottom:10px;left:0;right:0;display:flex;
        justify-content:space-between;padding:0 18px;font-family:var(--mono);
        font-size:10px;color:var(--faint);pointer-events:none;z-index:2}
 
 /* ---- controls + notes ---- */
-.bar{display:flex;align-items:center;gap:9px;flex-wrap:wrap;padding:14px 26px}
+.bar{display:flex;align-items:center;gap:7px 9px;flex-wrap:wrap;padding:10px 22px}
 button{font-family:var(--display);font-weight:600;font-size:12px;letter-spacing:.03em;
        color:var(--ink);background:var(--panel-2);border:1px solid var(--line);
        border-radius:3px;padding:7px 14px;cursor:pointer;transition:border-color .15s,background .15s}
@@ -133,8 +153,10 @@ button.primary{background:color-mix(in srgb,var(--kc) 16%,var(--panel-2));
 .speed{display:flex;align-items:center;gap:8px;margin-left:6px;font-family:var(--mono);
        font-size:11px;color:var(--muted)}
 input[type=range]{accent-color:var(--kc);width:112px}
-.legend{margin-left:auto;display:flex;gap:16px;font-family:var(--mono);font-size:10px;
-        color:var(--faint);flex-wrap:wrap}
+/* On the atlas, whose colours it names, just above the hemisphere labels. */
+.legend{position:absolute;left:18px;bottom:28px;right:18px;display:flex;gap:4px 12px;
+        justify-content:center;font-family:var(--mono);font-size:9px;color:var(--faint);
+        flex-wrap:wrap;pointer-events:none;z-index:2}
 .legend i{font-style:normal;display:inline-block;width:8px;height:8px;border-radius:50%;
           margin-right:5px;vertical-align:baseline}
 footer{padding:4px 26px 30px;color:var(--faint);font-size:13px;max-width:78ch}
@@ -144,14 +166,12 @@ footer a:hover{color:var(--ecg)}
 footer .rule{height:1px;background:var(--line);margin:0 0 16px}
 @media (max-width:920px){
   .brain{grid-template-columns:1fr 1fr}
-  .cell.curve{grid-column:span 2}
   .should{display:none}
 }
 @media (max-width:620px){
   .brain{grid-template-columns:1fr}
   .cell.atlas{min-height:min(64vh,430px)}
   .bay{height:clamp(240px,38vh,340px)}
-  .cell.curve{grid-column:span 1}
   .note{display:none}
 }
 @media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
@@ -161,9 +181,8 @@ footer .rule{height:1px;background:var(--line);margin:0 0 16px}
   <header>
     <div>
       <h1>A fly runs the <em>Megacode</em></h1>
-      <p class="tag">5,177 Kenyon cells from a real connectome learn the AHA 2025 cardiac
-        arrest algorithm by trial and error, while 2,875 central-complex neurons keep count.
-        It sees only what a bystander could see. No fly was harmed, or indeed involved.</p>
+      <p class="tag">A real connectome learns the AHA 2025 cardiac arrest algorithm by trial
+        and error. No fly was harmed, or indeed involved.</p>
     </div>
     <div class="stats">
       <div class="stat"><b id="s-trials">0</b><span>decisions</span></div>
@@ -174,19 +193,21 @@ footer .rule{height:1px;background:var(--line);margin:0 0 16px}
     </div>
   </header>
 
+  <div class="stage">
+  <div class="stage-left">
   <div class="bay">
     <canvas id="bay"></canvas>
     <div class="loading" id="loading">Loading connectome…</div>
     <div class="hud">
       <div class="clock" id="h-clock">00:00</div>
       <div class="row"><i>Rhythm</i><span class="rhythm" id="h-rhythm">—</span></div>
-      <div class="row hidden-from-fly"><i>Shocks</i><span id="h-shocks">0</span></div>
-      <div class="row hidden-from-fly"><i>Epinephrine</i><span id="h-epi">0</span></div>
-      <div class="row hidden-from-fly"><i>Antiarrhythmic</i><span id="h-anti">—</span></div>
-      <div class="row"><i>IV access</i><span id="h-access">none</span></div>
-      <div class="row"><i>Airway</i><span id="h-airway">none</span></div>
       <div class="row"><i>ETCO₂</i><span id="h-etco2">—</span></div>
-      <div class="hud-note">Greyed rows are hidden from the fly. It has to remember them.</div>
+      <div class="row"><i>IV</i><span id="h-access">none</span></div>
+      <div class="row"><i>Airway</i><span id="h-airway">none</span></div>
+      <div class="row hidden-from-fly"><i>Shocks</i><span id="h-shocks">0</span></div>
+      <div class="row hidden-from-fly"><i>Epi</i><span id="h-epi">0</span></div>
+      <div class="row hidden-from-fly"><i>Antiarrh.</i><span id="h-anti">—</span></div>
+      <div class="hud-note">grey: hidden from the fly, it must remember</div>
     </div>
   </div>
 
@@ -197,7 +218,19 @@ footer .rule{height:1px;background:var(--line);margin:0 0 16px}
     <span class="should" id="v-should"></span>
   </div>
 
-  <div class="brain">
+  <div class="bar">
+    <button class="primary" id="b-run">Start</button>
+    <button id="b-step">Step</button>
+    <button id="b-train">Fast-train 1,500</button>
+    <button id="b-case">New case</button>
+    <button id="b-reset">Forget everything</button>
+    <label class="speed">Speed
+      <input type="range" id="b-speed" min="1" max="14" step="1" value="5">
+      <span id="b-speedv">1.4/s</span>
+    </label>
+  </div>
+  </div>
+
     <div class="cell atlas">
       <canvas id="c-atlas"></canvas>
       <div class="atlas-ui">
@@ -212,59 +245,45 @@ footer .rule{height:1px;background:var(--line);margin:0 0 16px}
       </div>
       <div class="atlas-tip" id="a-tip" hidden></div>
       <div class="atlas-meta">
-        <div><b id="a-cells">—</b> traced neurons</div>
-        <div><b id="a-segs">—</b> neurite segments</div>
-        <div>redraw <b id="a-ms">—</b></div>
-        <div><b id="a-ctx-count">—</b> neuropils</div>
+        <div><b id="a-cells">—</b> neurons · <b id="a-segs">—</b> segments</div>
+        <div><b id="a-ctx-count">—</b> neuropils · redraw <b id="a-ms">—</b></div>
       </div>
-      <div class="hint" id="a-hint" hidden>drag to orbit · Ctrl/⌘ + wheel or pinch to zoom · double-click to reset</div>
+      <div class="hint" id="a-hint" hidden>drag to orbit · Ctrl/⌘-scroll to zoom · double-click resets</div>
       <div class="mem-key" id="a-mem" hidden>
-        <b>Memory.</b> Every Kenyon-cell axon is drawn, lobe by lobe, only as bright as
-        what dopamine has left of its KC→MBON synapses there; the cells on the decision
-        just taken light up on top. Lobe per synapse is FlyWire's own label. Dopamine neurons flash on each verdict: <span class="pam">PAM</span> if
-        right, <span class="ppl1">PPL1</span> if wrong. Nothing brightens with
-        learning: the model has no potentiation.
+        <b>Memory.</b> Each Kenyon-cell axon, lobe by lobe, is as bright as what dopamine
+        has left of its KC→MBON synapses; the last decision's cells light on top.
+        <span class="pam">PAM</span> flashes if right, <span class="ppl1">PPL1</span> if
+        wrong. Nothing brightens: the model has no potentiation.
       </div>
       <div class="mem-key" id="a-wm-key" hidden>
-        <b>Working memory.</b> The central complex, 2,875 neurons nobody trained, holding
-        this patient's history. Colour is each cell's state, <span class="above">above</span>
-        or <span class="below">below</span> rest; <span class="write">yellow</span> flashes
-        where the real MBON→CX pathway writes in on a decision; <b>white</b> marks the
-        eight cells the mushroom body reads back (which eight is modelled). Clears with
-        each new patient.
+        <b>Working memory.</b> The untrained central complex, holding this patient's
+        history: cells <span class="above">above</span> or <span class="below">below</span>
+        rest, <span class="write">yellow</span> where MBON→CX writes in, <b>white</b> the
+        eight cells read back (which eight is modelled).
+      </div>
+      <div class="legend">
+        <span><i style="background:#3ddbb8"></i>Kenyon cell</span>
+        <span><i style="background:#6e96ff"></i>MBON</span>
+        <span><i style="background:#ff4d8d"></i>DAN</span>
+        <span><i style="background:#3bb0f0"></i>PAM reward</span>
+        <span><i style="background:#ff4d6d"></i>PPL1 punishment</span>
+        <span><i style="background:#b06bff"></i>APL</span>
+        <span><i style="background:#738cae"></i>central complex</span>
+        <span><i style="background:#ffd95c"></i>firing</span>
+        <span><i style="background:#8cf2ff"></i>holding state</span>
       </div>
       <div class="hemis">
         <span id="a-left">◀ left hemisphere</span>
         <span id="a-right">right hemisphere ▶</span>
       </div>
     </div>
-    <div class="cell rehearsal"><canvas id="c-rehearsal"></canvas></div>
-    <div class="cell tape"><canvas id="c-tape"></canvas></div>
-    <div class="cell"><canvas id="c-mbon"></canvas></div>
-    <div class="cell curve"><canvas id="c-curve"></canvas></div>
   </div>
 
-  <div class="bar">
-    <button class="primary" id="b-run">Start</button>
-    <button id="b-step">Step</button>
-    <button id="b-train">Fast-train 1,500</button>
-    <button id="b-case">New case</button>
-    <button id="b-reset">Forget everything</button>
-    <label class="speed">Speed
-      <input type="range" id="b-speed" min="1" max="14" step="1" value="5">
-      <span id="b-speedv">1.4/s</span>
-    </label>
-    <div class="legend">
-      <span><i style="background:#3ddbb8"></i>Kenyon cell</span>
-      <span><i style="background:#3bb0f0"></i>PAM · reward</span>
-      <span><i style="background:#ff4d6d"></i>PPL1 · punishment</span>
-      <span><i style="background:#6e96ff"></i>MBON</span>
-      <span><i style="background:#ff4d8d"></i>DAN</span>
-      <span><i style="background:#b06bff"></i>APL</span>
-      <span><i style="background:#738cae"></i>central complex</span>
-      <span><i style="background:#8cf2ff"></i>holding state</span>
-      <span><i style="background:#43e08a"></i>monitor</span>
-    </div>
+  <div class="brain">
+    <div class="cell rehearsal"><canvas id="c-rehearsal"></canvas></div>
+    <div class="cell curve"><canvas id="c-curve"></canvas></div>
+    <div class="cell"><canvas id="c-mbon"></canvas></div>
+    <div class="cell tape"><canvas id="c-tape"></canvas></div>
   </div>
 
   <footer>
@@ -430,7 +449,7 @@ try {
       h.classList.add('nudge');
       clearTimeout(nudge);
       nudge = setTimeout(() => {
-        h.textContent = 'drag to orbit · Ctrl/⌘ + wheel or pinch to zoom · double-click to reset';
+        h.textContent = 'drag to orbit · Ctrl/⌘-scroll to zoom · double-click resets';
         h.classList.remove('nudge');
       }, 1600);
     });
@@ -710,7 +729,12 @@ const setLayer = (m) => {
 };
 $('a-overlay')?.addEventListener('click', () => setLayer(1));
 $('a-wm')?.addEventListener('click', () => setLayer(2));
-addEventListener('resize', () => bay.resize());
+// Observed, not window-resize: the bay's size now follows the grid, which changes when
+// the layout switches between side by side and stacked with no window event.
+new ResizeObserver(() => bay.resize()).observe($('bay'));
+// The stage fills the screen under the header, whose height depends on how it wraps.
+new ResizeObserver(([e]) => document.documentElement.style.setProperty(
+  '--head', Math.ceil(e.target.getBoundingClientRect().height) + 'px')).observe(document.querySelector('header'));
 
 newCase();
 bay.setAction('cpr', true);
