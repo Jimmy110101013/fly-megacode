@@ -1,0 +1,40 @@
+name: checks
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      # The scenario engine is the grader. If it accepts the wrong actions, every
+      # accuracy number in the README is meaningless, so it is tested first.
+      - name: ACLS engine
+        run: node pipeline/test-engine.mjs
+
+      # The learning rule has to move value in the right direction, and the
+      # Kenyon-cell codes for different actions have to stay distinguishable.
+      - name: mushroom-body plasticity
+        run: node pipeline/test-plasticity.mjs
+
+      # The page loads these at run time; a truncated or malformed commit would
+      # only show up as a blank canvas in a browser.
+      - name: shipped connectome files parse
+        run: |
+          for f in web/*.json; do
+            node -e "JSON.parse(require('fs').readFileSync('$f'));" || exit 1
+            echo "ok  $f"
+          done
+
+      - name: checksums match web/NOTICE.md
+        run: |
+          cd web
+          awk '/^[0-9a-f]{64}  /{print}' NOTICE.md > /tmp/expected.txt
+          sha256sum -c /tmp/expected.txt

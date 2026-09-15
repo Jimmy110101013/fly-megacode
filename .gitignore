@@ -1,0 +1,13 @@
+# Raw connectome downloads (6 GB) and every derived intermediate.
+# data/out/*.json that the page actually loads lives in web/ and IS committed.
+data/
+.venv/
+__pycache__/
+*.pyc
+.DS_Store
+
+# AHA guideline PDFs and the working transcription of their algorithm text.
+# The procedure is implemented in web/acls-engine.js; the source text is
+# copyrighted by the American Heart Association and is not redistributed here.
+refs/
+.claude/

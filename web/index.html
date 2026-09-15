@@ -1,0 +1,570 @@
+<title>果蠅 Megacode</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,800&family=Newsreader:ital,opsz,wght@0,6..72,300;0,6..72,400;1,6..72,300&family=JetBrains+Mono:wght@400;700&display=swap">
+
+<style>
+/* A resuscitation bay and a confocal micrograph are both black-ground worlds.
+   This page commits to that one world rather than offering a light theme. */
+:root {
+  --ground:#07090c; --panel:#0e1319; --panel-2:#121922; --line:#1c2530;
+  --ink:#dce5ee; --muted:#7c8da0; --faint:#4c5c6e;
+  --ecg:#43e08a; --kc:#f0a93b; --pam:#3bb0f0; --ppl1:#ff4d6d;
+  --display:"Bricolage Grotesque",ui-sans-serif,system-ui,sans-serif;
+  --body:"Newsreader",Georgia,serif;
+  --mono:"JetBrains Mono",ui-monospace,SFMono-Regular,monospace;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--ground);color:var(--ink);font-family:var(--body);
+     font-size:15px;line-height:1.55;-webkit-font-smoothing:antialiased}
+.wrap{display:flex;flex-direction:column;min-height:100vh;max-width:1560px;margin:0 auto}
+
+/* ---- header ---- */
+header{display:flex;flex-wrap:wrap;align-items:flex-end;gap:10px 28px;
+       padding:20px 26px 14px;border-bottom:1px solid var(--line)}
+h1{font-family:var(--display);font-weight:800;font-size:clamp(23px,3.1vw,34px);
+   letter-spacing:-.02em;margin:0;line-height:1;text-wrap:balance}
+h1 em{font-style:normal;color:var(--kc)}
+.tag{font-family:var(--body);font-style:italic;font-weight:300;color:var(--muted);
+     font-size:14px;max-width:46ch;margin:0}
+.stats{display:flex;gap:22px;margin-left:auto;flex-wrap:wrap}
+.stat{display:flex;flex-direction:column;gap:1px}
+.stat b{font-family:var(--mono);font-weight:700;font-size:19px;
+        font-variant-numeric:tabular-nums;line-height:1.1}
+.stat span{font-family:var(--display);font-weight:600;font-size:9px;
+           letter-spacing:.1em;text-transform:uppercase;color:var(--faint)}
+
+/* ---- bay ---- */
+.bay{position:relative;height:clamp(300px,52vh,560px);background:var(--ground)}
+.bay canvas{width:100%;height:100%;display:block}
+.hud{position:absolute;top:14px;right:16px;display:flex;flex-direction:column;gap:6px;
+     padding:11px 13px;background:rgba(9,13,18,.82);border:1px solid var(--line);
+     border-radius:3px;font-family:var(--mono);font-size:11px;min-width:168px;
+     backdrop-filter:blur(7px)}
+.hud .row{display:flex;justify-content:space-between;gap:14px;
+          font-variant-numeric:tabular-nums}
+.hud .row i{font-style:normal;color:var(--faint)}
+.hud .clock{font-size:23px;font-weight:700;letter-spacing:-.02em;color:var(--ecg);
+            line-height:1.1;margin-bottom:2px}
+.hud .rhythm{font-weight:700;color:var(--ecg)}
+.hud .hidden-from-fly{opacity:.45}
+.hud .hud-note{margin-top:5px;padding-top:5px;border-top:1px solid var(--line);
+               font-size:9px;color:var(--faint);line-height:1.4}
+.loading{position:absolute;inset:0;display:grid;place-items:center;
+         font-family:var(--mono);font-size:12px;color:var(--muted);
+         background:var(--ground);z-index:3}
+
+/* ---- verdict strip ---- */
+.verdict{display:flex;align-items:center;gap:16px;padding:11px 26px;
+         border-block:1px solid var(--line);background:var(--panel);min-height:58px}
+.did{font-family:var(--display);font-weight:800;font-size:17px;letter-spacing:-.01em;
+     white-space:nowrap}
+.mark{font-family:var(--mono);font-weight:700;font-size:11px;padding:3px 9px;
+      border-radius:2px;letter-spacing:.06em;white-space:nowrap}
+.mark.ok{color:var(--pam);border:1px solid color-mix(in srgb,var(--pam) 45%,transparent);
+         background:color-mix(in srgb,var(--pam) 11%,transparent)}
+.mark.no{color:var(--ppl1);border:1px solid color-mix(in srgb,var(--ppl1) 45%,transparent);
+         background:color-mix(in srgb,var(--ppl1) 11%,transparent)}
+.note{color:var(--muted);font-size:14px;min-width:0;overflow:hidden;text-overflow:ellipsis;
+      white-space:nowrap}
+.should{margin-left:auto;font-family:var(--mono);font-size:11px;color:var(--faint);
+        white-space:nowrap}
+.should b{color:var(--ecg);font-weight:400}
+
+/* ---- brain ---- */
+.brain{display:grid;grid-template-columns:1fr 1fr;gap:1px;background:var(--line);
+       border-bottom:1px solid var(--line)}
+.cell{background:var(--panel);min-height:186px;position:relative}
+.cell canvas{width:100%;height:100%;display:block}
+.cell.atlas{grid-column:1/-1;min-height:clamp(340px,52vh,520px);background:#05070a}
+.atlas-ui{position:absolute;top:12px;left:14px;display:flex;flex-direction:column;
+          gap:6px;z-index:2}
+.atlas-ui button{font-size:11px;padding:5px 11px;background:rgba(14,19,25,.85);
+                 backdrop-filter:blur(6px)}
+.atlas-ui button[aria-pressed=true]{background:color-mix(in srgb,var(--pam) 22%,transparent);
+                 border-color:color-mix(in srgb,var(--pam) 55%,transparent);color:#bfe4ff}
+.atlas-meta{position:absolute;top:12px;right:14px;text-align:right;font-family:var(--mono);
+            font-size:10px;color:var(--faint);line-height:1.7;z-index:2}
+.atlas-meta b{color:var(--muted);font-weight:400}
+.hint{position:absolute;top:14px;left:50%;transform:translateX(-50%);
+      font-family:var(--mono);font-size:10px;color:var(--faint);
+      letter-spacing:.08em;pointer-events:none;z-index:2}
+.hemis{position:absolute;bottom:10px;left:0;right:0;display:flex;
+       justify-content:space-between;padding:0 18px;font-family:var(--mono);
+       font-size:10px;color:var(--faint);pointer-events:none;z-index:2}
+
+/* ---- controls + notes ---- */
+.bar{display:flex;align-items:center;gap:9px;flex-wrap:wrap;padding:14px 26px}
+button{font-family:var(--display);font-weight:600;font-size:12px;letter-spacing:.03em;
+       color:var(--ink);background:var(--panel-2);border:1px solid var(--line);
+       border-radius:3px;padding:7px 14px;cursor:pointer;transition:border-color .15s,background .15s}
+button:hover{border-color:var(--faint);background:#18202b}
+button:focus-visible{outline:2px solid var(--kc);outline-offset:2px}
+button.primary{background:color-mix(in srgb,var(--kc) 16%,var(--panel-2));
+               border-color:color-mix(in srgb,var(--kc) 45%,transparent);color:var(--kc)}
+.speed{display:flex;align-items:center;gap:8px;margin-left:6px;font-family:var(--mono);
+       font-size:11px;color:var(--muted)}
+input[type=range]{accent-color:var(--kc);width:112px}
+.legend{margin-left:auto;display:flex;gap:16px;font-family:var(--mono);font-size:10px;
+        color:var(--faint);flex-wrap:wrap}
+.legend i{font-style:normal;display:inline-block;width:8px;height:8px;border-radius:50%;
+          margin-right:5px;vertical-align:baseline}
+footer{padding:4px 26px 30px;color:var(--faint);font-size:13px;max-width:78ch}
+footer p{margin:0 0 9px}
+footer a{color:var(--muted);text-decoration:underline;text-underline-offset:2px}
+footer a:hover{color:var(--ecg)}
+footer .rule{height:1px;background:var(--line);margin:0 0 16px}
+@media (max-width:920px){
+  .brain{grid-template-columns:1fr 1fr}
+  .cell.curve{grid-column:span 2}
+  .should{display:none}
+}
+@media (max-width:620px){
+  .brain{grid-template-columns:1fr}
+  .cell.atlas{min-height:min(64vh,430px)}
+  .bay{height:clamp(240px,38vh,340px)}
+  .cell.curve{grid-column:span 1}
+  .note{display:none}
+}
+@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+</style>
+
+<div class="wrap">
+  <header>
+    <div>
+      <h1>果蠅在跑 <em>Megacode</em></h1>
+      <p class="tag">5,177 個 Kenyon cell 學 AHA 2025 心跳停止演算法，2,875 個中央複合體
+        神經元替牠記住做過什麼。牠只看得到病人身上看得到的東西。</p>
+    </div>
+    <div class="stats">
+      <div class="stat"><b id="s-trials">0</b><span>決策次數</span></div>
+      <div class="stat"><b id="s-acc">—</b><span>近期正確率</span></div>
+      <div class="stat"><b id="s-case">0</b><span>場次</span></div>
+      <div class="stat"><b id="s-mass">1.00</b><span>突觸總量</span></div>
+      <div class="stat"><b id="s-cx">0.00</b><span>中央複合體狀態</span></div>
+    </div>
+  </header>
+
+  <div class="bay">
+    <canvas id="bay"></canvas>
+    <div class="loading" id="loading">載入連結體…</div>
+    <div class="hud">
+      <div class="clock" id="h-clock">00:00</div>
+      <div class="row"><i>節律</i><span class="rhythm" id="h-rhythm">—</span></div>
+      <div class="row hidden-from-fly"><i>電擊</i><span id="h-shocks">0</span></div>
+      <div class="row hidden-from-fly"><i>Epinephrine</i><span id="h-epi">0</span></div>
+      <div class="row hidden-from-fly"><i>抗心律不整</i><span id="h-anti">—</span></div>
+      <div class="row"><i>靜脈通路</i><span id="h-access">無</span></div>
+      <div class="row"><i>氣道</i><span id="h-airway">無</span></div>
+      <div class="row"><i>ETCO₂</i><span id="h-etco2">—</span></div>
+      <div class="hud-note">灰字是果蠅看不到的——牠得自己記得</div>
+    </div>
+  </div>
+
+  <div class="verdict">
+    <span class="did" id="v-action">待命</span>
+    <span class="mark ok" id="v-mark">—</span>
+    <span class="note" id="v-note">按下開始，先看牠錯一陣子。</span>
+    <span class="should" id="v-should"></span>
+  </div>
+
+  <div class="brain">
+    <div class="cell atlas">
+      <canvas id="c-atlas"></canvas>
+      <div class="atlas-ui">
+        <button id="a-frontal" aria-pressed="true">正面</button>
+        <button id="a-dorsal" aria-pressed="false">背側</button>
+        <button id="a-whole" aria-pressed="false">加上全腦</button>
+        <button id="a-overlay" aria-pressed="false">記憶疊層</button>
+      </div>
+      <div class="atlas-meta">
+        <div><b id="a-cells">—</b> 條描繪神經元</div>
+        <div><b id="a-segs">—</b> 段神經突</div>
+        <div>重繪 <b id="a-ms">—</b></div>
+        <div id="a-axes">x = 內外側 · y = 背腹側</div>
+        <div><b id="a-ctx-count">—</b> 個腦區</div>
+      </div>
+      <div class="hint" id="a-hint" hidden>拖曳可旋轉</div>
+      <div class="hemis">
+        <span id="a-left">◀ 左腦 · 解剖背景</span>
+        <span id="a-right">右腦 · 模型在此 ▶</span>
+      </div>
+    </div>
+    <div class="cell"><canvas id="c-mbon"></canvas></div>
+    <div class="cell curve"><canvas id="c-curve"></canvas></div>
+  </div>
+
+  <div class="bar">
+    <button class="primary" id="b-run">開始</button>
+    <button id="b-step">單步</button>
+    <button id="b-train">速成訓練 1500 場</button>
+    <button id="b-case">換一場</button>
+    <button id="b-reset">全部忘掉</button>
+    <label class="speed">速度
+      <input type="range" id="b-speed" min="1" max="14" step="1" value="5">
+      <span id="b-speedv">1.4/s</span>
+    </label>
+    <div class="legend">
+      <span><i style="background:#3ddbb8"></i>Kenyon cell</span>
+      <span><i style="background:#3bb0f0"></i>PAM · 獎勵</span>
+      <span><i style="background:#ff4d6d"></i>PPL1 · 懲罰</span>
+      <span><i style="background:#6e96ff"></i>MBON</span>
+      <span><i style="background:#ff4d8d"></i>DAN</span>
+      <span><i style="background:#b06bff"></i>APL</span>
+      <span><i style="background:#738cae"></i>中央複合體</span>
+      <span><i style="background:#8cf2ff"></i>正在記憶</span>
+      <span><i style="background:#43e08a"></i>監視器</span>
+    </div>
+  </div>
+
+  <footer>
+    <div class="rule"></div>
+    <p><b>果蠅從來沒有被告知正確答案，也沒有人替牠記住做過什麼。</b>牠看到的只有病人身上
+      觀察得到的東西——節律、ETCO₂、有沒有管路、有沒有氣管內管。電擊幾次了、腎上腺素什麼時候
+      給的、第幾個週期，這些是行為紀錄，由牠自己的<b>中央複合體</b>撐住：2,875 個神經元、
+      171,030 條依真實接線與神經傳導物質定號的遞迴連結，由真實的 MBON→CX 路徑驅動。
+      那個迴路裡<b>沒有任何一個權重是訓練出來的</b>——唯一可塑的突觸留在果蠅真的有可塑性的
+      地方，也就是蘑菇體的 KC→MBON。牠對十個可能動作各評一次分，挑一個做下去，做完才知道
+      自己對不對——就這一個 bit，以多巴胺的形式送達。答對徵召 PAM 神經元，答錯徵召 PPL1。</p>
+    <p>臨床正確性完全不經過果蠅。一個依
+      <a href="https://cpr.heart.org/en/resuscitation-science/cpr-and-ecc-guidelines/adult-advanced-life-support">AHA
+      2025 成人心跳停止演算法</a>寫成的狀態機負責評分，每次答錯都會在上方顯示正確答案。
+      接線取自 <a href="https://zenodo.org/records/10676866">FlyWire FAFB v783</a>
+      （Dorkenwald 等人），標註與
+      <a href="https://zenodo.org/records/10877326">描繪骨架</a>取自 Schlegel 等人，
+      <i>Nature</i> 2024，皆為 CC BY 4.0。下方圖譜的每一條線都是一顆真實神經元的
+      實際形態；暗的是靜止，放電時整顆細胞亮起。兩側蘑菇體都在模型裡，所以兩邊都會亮。
+      Adenosine 是刻意不放的——它屬於心搏過速演算法，不屬於心跳停止。</p>
+    <p><b>這是神經科學實驗，不是臨床工具。</b>它不能用於病人照護，不是 ACLS 訓練或認證教材，
+      也未經美國心臟協會審閱或背書。真正的臨床依據請以 AHA 出版的指引為準。<br>
+      原始碼與完整方法：<a href="https://github.com/Jimmy110101013/fly-megacode">github.com/Jimmy110101013/fly-megacode</a>（MIT）。</p>
+  </footer>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/0.157.0/three.min.js"></script>
+<script type="module">
+import { Megacode, ACTIONS, makeFeatureSpace } from './acls-engine.js';
+import { MushroomBody } from './mushroom-body.js';
+import { CentralComplex } from './central-complex.js';
+import { Bay } from './scene3d.js';
+import { BrainView } from './brainview.js';
+import { Atlas3D } from './atlas3d.js';
+
+const $ = (id) => document.getElementById(id);
+/* A page can be measured before it has a size -- loaded in a hidden tab, or
+   prerendered -- and innerWidth is then 0. Falling back to a desktop width keeps
+   a full-size machine from being permanently downgraded by a transient zero. */
+const viewportWidth = () =>
+  Math.max(document.documentElement?.clientWidth || 0, window.innerWidth || 0) || 1024;
+
+const PRETTY = {
+  shock:'電擊去顫', cpr:'胸外按壓', epinephrine:'Epinephrine 1 mg',
+  amiodarone:'Amiodarone', lidocaine:'Lidocaine', access:'建立靜脈通路',
+  airway:'進階氣道', treat_cause:'處理可逆原因',
+  rhythm_check:'檢查節律', post_arrest_care:'復甦後照護',
+};
+
+const circuit = await (await fetch('./mb_circuit.json')).json();
+const cxCircuit = await (await fetch('./cx_circuit.json')).json();
+
+/*
+ * The fly is given only what a bystander could read off the patient -- rhythm,
+ * ETCO2, whether a line and a tube are in. Shot count, drug timing and cycle
+ * number are records of what has been done, and it has to hold those itself.
+ * Earlier versions handed them over as input, which meant the scenario engine was
+ * acting as the animal's working memory.
+ */
+const space = makeFeatureSpace({ omitMemory: true, cxGroups: 8, cxLevels: 5 });
+const fly = new MushroomBody(circuit, space.FEATURES.length, ACTIONS.length,
+                             { seed: 11, groups: space.GROUP_SPANS, stateClaws: 6 });
+/*
+ * The central complex, as a fixed reservoir: 2,875 neurons wired to each other the
+ * way the animal is, driven by the real MBON->CX pathway. Nothing in it is trained
+ * -- the only plastic synapses in the loop are the mushroom body's.
+ */
+const cx = new CentralComplex(cxCircuit, { readouts: 8, seed: 11 });
+const bay = new Bay($('bay'));
+const brain = new BrainView(
+  { kcCanvas: null, mbonCanvas: $('c-mbon'), curveCanvas: $('c-curve') }, fly);
+
+// Traced morphology is a big file and an optional layer: without it the page
+// still runs, it just has nothing anatomical to light up.
+const engram = new Float32Array(fly.nKC);
+const mbonHeat = new Float32Array(fly.nMBON);
+let atlas = null;
+try {
+  // A phone pays for every byte of this and renders fewer of them anyway, so it
+  // gets a version with a third of the geometry.
+  const lite = viewportWidth() < 760;   // width, not height: a short window is not a phone
+  const res = await fetch(lite ? './atlas-lite.json' : './atlas.json');
+  if (!res.ok) throw new Error(res.status);
+  const atlasData = await res.json();
+  // The rest of the brain, sampled, so the mushroom body has somewhere to sit.
+  let npData = null;
+  try { npData = await (await fetch('./neuropils.json')).json(); } catch { /* optional */ }
+  let cxAtlas = null;
+  try { cxAtlas = await (await fetch('./cx_atlas.json')).json(); } catch { /* optional */ }
+  atlas = new Atlas3D($('c-atlas'), atlasData, {
+    kc: new Map(circuit.kc.map((n, i) => [n.root_id, i])),
+    mbon: new Map(circuit.mbon.map((n, i) => [n.root_id, i])),
+    dan: new Map(circuit.dan.map((n, i) => [n.root_id, i])),
+  }, npData, cxAtlas);
+  // Dragging to orbit is a pointer gesture and a GPU cost; a phone gets the
+  // preset views instead.
+  if (viewportWidth() >= 760) {
+    atlas.enableRotate();
+    $('a-hint').hidden = false;
+  }
+  if (npData) {
+    $('a-ctx-count').textContent = npData.regions.length.toLocaleString();
+  } else {
+    $('a-whole').style.display = 'none';
+  }
+  atlas.engram = engram;
+  atlas.mbonHeat = mbonHeat;
+  $('a-cells').textContent = atlasData.neurons.length.toLocaleString();
+  $('a-segs').textContent = atlas.nSeg.toLocaleString();
+} catch (e) {
+  // Keep the panel's controls in the DOM -- tearing them out here leaves the
+  // handler wiring below reaching for elements that no longer exist.
+  $('c-atlas').remove();
+  document.querySelector('.atlas-ui').style.display = 'none';
+  $('a-left').textContent = '';
+  $('a-right').textContent = '';
+  document.querySelector('.atlas-meta').textContent = '傳統形態資料未載入';
+}
+if (atlas) {
+  $('a-left').textContent = `\u25c0 \u5de6\u8166 ${(atlas.counts[0] ?? 0).toLocaleString()} \u9846`;
+  $('a-right').textContent = `\u53f3\u8166 ${(atlas.counts[1] ?? 0).toLocaleString()} \u9846 \u25b6`;
+}
+$('loading').remove();
+
+let mc = new Megacode(Date.now());
+let cases = 0, decisions = 0, recent = [], history = [];
+let running = false, acc = 0, stepEvery = 1 / 1.4, sinceStep = 0;
+
+function newCase() {
+  mc = new Megacode(Date.now() + cases * 7919);
+  cx.reset();                       // a new patient starts with a clear head
+  cases++;
+  bay.setRhythm(mc.state.rhythm);
+  $('s-case').textContent = cases;
+}
+
+let sinceSample = 0;
+/** One decision's bookkeeping. `stride` thins the curve during fast training. */
+function record(correct, stride = 1) {
+  decisions++;
+  recent.push(correct ? 1 : 0);
+  if (recent.length > 60) recent.shift();
+  acc = recent.reduce((x, y) => x + y, 0) / recent.length;
+  if (++sinceSample >= stride) {
+    sinceSample = 0;
+    history.push(acc);
+    if (history.length > 420) history.shift();
+  }
+}
+
+/**
+ * Run megacodes as fast as the CPU allows, in chunks so the page stays alive.
+ * The fly reaches its plateau around 700 scenarios; watching that happen at
+ * human speed takes five minutes, which is five minutes of watching it be wrong.
+ */
+async function fastTrain(n = 1500, sliceMs = 28, budgetMs = Infinity) {
+  const btn = $('b-train');
+  btn.disabled = true;
+  const wasRunning = running; running = false;
+  // Chunk by elapsed time, not by count, and yield with a timer rather than a
+  // frame: a hidden tab stops painting, and a frame-driven loop would stall.
+  let done = 0;
+  const deadline = performance.now() + budgetMs;
+  while (done < n) {
+    if (performance.now() > deadline) break;   // a slow device stops early rather than hanging
+    const until = performance.now() + sliceMs;
+    while (done < n && performance.now() < until) {
+      const m = new Megacode(Date.now() + done * 7919);
+      cx.reset();
+      for (let s = 0; s < 60 && !m.state.over; s++) {
+        const ok = m.correctActions();
+        if (!ok.length) break;
+        const a = fly.decide(space.encode(m.state, m.shockable, cx.out));
+        const res = m.step(a);
+        fly.learn(res.correct);
+        cx.step(fly.last.learned);
+        record(res.correct, 20);
+      }
+      cases++; done++;
+    }
+    btn.textContent = `訓練中… ${Math.round((done / n) * 100)}%`;
+    $('s-trials').textContent = decisions.toLocaleString();
+    $('s-acc').textContent = Math.round(acc * 100) + '%';
+    $('s-case').textContent = cases.toLocaleString();
+    $('s-mass').textContent = fly.weightMass().toFixed(2);
+    $('s-cx').textContent = cx.energy().toFixed(2);
+    await new Promise((r) => setTimeout(r, 0));
+  }
+  btn.textContent = '再訓練 1500 場';
+  btn.disabled = false;
+  newCase();
+  running = wasRunning || true;
+  $('b-run').textContent = '暫停';
+}
+
+function decide() {
+  if (mc.state.over || !mc.correctActions().length) { newCase(); return; }
+  const feats = space.encode(mc.state, mc.shockable, cx.out);
+  const a = fly.decide(feats);
+  const trace = fly.last.activeKC;
+  const res = mc.step(a);
+  fly.learn(res.correct);
+  cx.step(fly.last.learned);        // the fly writes what it just did into its own state
+
+  record(res.correct);
+
+  brain.pulse(trace, res.correct);
+  atlas?.fire(trace);
+  bay.setAction(res.action, res.correct);
+  bay.setRhythm(mc.state.rhythm);
+  paint(res);
+  if (res.done) newCase();
+}
+
+function paint(res) {
+  const s = mc.state;
+  $('v-action').textContent = PRETTY[res.action] ?? res.action;
+  const mark = $('v-mark');
+  mark.className = 'mark ' + (res.correct ? 'ok' : 'no');
+  mark.textContent = res.correct ? 'PAM · 獎勵' : 'PPL1 · 懲罰';
+  $('v-note').textContent = res.note;
+  $('v-should').innerHTML = res.correct ? ''
+    : '演算法要的是 <b>' + res.accepted.map((i) => PRETTY[ACTIONS[i]]).join(' / ') + '</b>';
+
+  $('h-clock').textContent =
+    String(Math.floor(s.t / 60)).padStart(2, '0') + ':' + String(s.t % 60).padStart(2, '0');
+  $('h-rhythm').textContent = s.rhythm;
+  $('h-shocks').textContent = s.shocks;
+  $('h-epi').textContent = s.epiCount;
+  $('h-anti').textContent = s.antiarrhythmicDoses
+    ? `${s.antiarrhythmicDrug} ×${s.antiarrhythmicDoses}` : '—';
+  $('h-access').textContent = s.access ? 'IV' : '無';
+  $('h-airway').textContent = s.airway ? 'ETT' : '無';
+  $('h-etco2').textContent = s.etco2 + ' mmHg';
+
+  $('s-trials').textContent = decisions.toLocaleString();
+  $('s-acc').textContent = recent.length > 8 ? Math.round(acc * 100) + '%' : '—';
+  $('s-mass').textContent = fly.weightMass().toFixed(2);
+  $('s-cx').textContent = cx.energy().toFixed(2);
+}
+
+const smallScreen = viewportWidth() < 760;
+/*
+ * How often the atlas redraws. It only has to keep up with the heat decay, not
+ * with the 3D scene, and it is the most expensive thing on the page -- so the
+ * interval adapts to whatever the device can actually sustain rather than to a
+ * guess about what kind of device it is.
+ */
+let atlasEvery = smallScreen ? 1 / 20 : 1 / 45;
+let atlasClock = 0;
+let frameAvg = 16;
+let prev = performance.now();
+let prev0 = performance.now();
+function frame(now) {
+  const rawGap = now - prev0; prev0 = now;
+  frameAvg += (rawGap - frameAvg) * 0.05;
+  // below ~28 fps, redraw the atlas less often; comfortably above, speed it back up
+  if (frameAvg > 36 && atlasEvery < 1 / 8) atlasEvery = Math.min(1 / 8, atlasEvery * 1.08);
+  else if (frameAvg < 22 && atlasEvery > 1 / 45) atlasEvery = Math.max(1 / 45, atlasEvery * 0.98);
+  const dt = Math.min(0.05, (now - prev) / 1000);
+  prev = now;
+  if (running) {
+    sinceStep += dt;
+    if (sinceStep >= stepEvery) { sinceStep = 0; decide(); }
+  }
+  bay.update(dt);
+  brain.decay(dt);
+  brain.render(history);
+
+  const m = fly.last?.mbon;
+  if (m) {
+    // Most MBONs carry some drive at all times, so a linear scale leaves the whole
+    // output population permanently lit. Cubing it keeps only the ones actually
+    // shouting, which is what "this cell just fired" should mean.
+    let mx = 1e-9;
+    for (const v of m) mx = Math.max(mx, v);
+    for (let i = 0; i < m.length; i++) mbonHeat[i] = (m[i] / mx) ** 3;
+  }
+  // The atlas only has to keep up with the heat decay, not with the 3D scene.
+  // Halving its rate on a phone halves the most expensive thing on the page.
+  atlasClock += dt;
+  if (atlas && atlasClock >= atlasEvery) {
+    atlasClock = 0;
+    if (atlas.overlay) { fly.engramPerKC(engram); atlas.setEngram(engram); }
+    atlas.setReservoir(cx.h);
+    atlas.render();
+    $('a-ms').textContent = atlas.lastDraw.toFixed(1) + ' ms';
+  }
+  requestAnimationFrame(frame);
+}
+
+$('b-run').onclick = (e) => {
+  running = !running;
+  e.target.textContent = running ? '暫停' : '開始';
+};
+$('b-step').onclick = () => decide();
+$('b-case').onclick = () => newCase();
+$('b-train').onclick = () => fastTrain();
+$('b-reset').onclick = () => {
+  const fresh = new MushroomBody(circuit, space.FEATURES.length, ACTIONS.length,
+                                 { seed: 11, groups: space.GROUP_SPANS, stateClaws: 6 });
+  fly.w.set(fresh.w); fly.trials = 0;
+  cx.reset();
+  decisions = 0; recent = []; history = []; acc = 0; sinceSample = 0;
+  $('b-train').textContent = '速成訓練 1500 場';
+  $('v-action').textContent = '待命';
+  $('v-note').textContent = '突觸回到解剖基線。按開始，從零看牠學。';
+  $('v-should').textContent = '';
+  running = false; $('b-run').textContent = '開始';
+  $('s-trials').textContent = '0'; $('s-acc').textContent = '—';
+  newCase();
+};
+$('b-speed').oninput = (e) => {
+  const v = Number(e.target.value);
+  const rate = 0.5 * Math.pow(1.35, v);
+  stepEvery = 1 / rate;
+  $('b-speedv').textContent = rate.toFixed(1) + '/s';
+};
+const setView = (v) => {
+  if (!atlas) return;
+  atlas.setView(v);
+  $('a-axes').textContent = v === 'frontal'
+    ? 'x = 內外側 · y = 背腹側' : 'x = 內外側 · y = 前後側';
+  $('a-frontal').setAttribute('aria-pressed', String(v === 'frontal'));
+  $('a-dorsal').setAttribute('aria-pressed', String(v === 'dorsal'));
+};
+$('a-frontal')?.addEventListener('click', () => setView('frontal'));
+$('a-dorsal')?.addEventListener('click', () => setView('dorsal'));
+$('a-whole')?.addEventListener('click', (e) => {
+  if (!atlas) return;
+  const on = atlas.toggleContext();
+  e.target.setAttribute('aria-pressed', String(on));
+  e.target.textContent = on ? '只看蘑菇體' : '加上全腦';
+});
+$('a-overlay')?.addEventListener('click', (e) => {
+  if (!atlas) return;
+  const on = atlas.toggleOverlay();
+  e.target.setAttribute('aria-pressed', String(on));
+  e.target.textContent = on ? '記憶疊層 · 開' : '記憶疊層';
+});
+addEventListener('resize', () => bay.resize());
+
+newCase();
+bay.setAction('cpr', true);
+requestAnimationFrame(frame);
+
+// Open on a fly that already knows the algorithm: the result is what it does,
+// not the first thousand mistakes. "Forget everything" replays the learning.
+$('v-note').textContent = '正在讓果蠅跑完 900 場 megacode…';
+await fastTrain(900, 110, 18000);  // big slices (a hidden tab clamps every yield), hard cap
+
+$('v-note').textContent = '這隻果蠅已經跑過 900 場，而且是自己記住做過什麼的。按「全部忘掉」可以從零看牠重學。';
+</script>
