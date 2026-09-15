@@ -199,20 +199,31 @@ the scan could just be measuring that neurons are lateralised.
 | central complex | 644 | **27.0%** | 275 | 18 / 90 |
 | other central-brain types | 3,341 | **2.0%** | 68 | 4 / 85 |
 
-The raw rate is the fairer comparison, because FDR grows stricter with the number of
-tests and the two rows ran very different numbers. It does not settle everything: the
-two populations also differ in how many cells reach a given descending pair, and so in
-per-test power, which is why no ratio is quoted here. The direction is not in doubt —
-the central complex's output onto descending neurons is split by hemisphere far more
-often than ordinary central neurons' is. Of the 222 strongest splits, 156 cross to the
+The raw rate fixes FDR's dependence on test count, but not power: a CX test has a
+median of 15 cells reaching the descending pair, a non-CX test 8, and a side-split
+cannot reach p ≤ 0.001 with few cells. Restricting both to tests with at least 12
+cells:
+
+| population | tests with ≥ 12 cells | raw p ≤ 0.001 |
+| --- | --- | --- |
+| central complex | 497 | **35.0%** |
+| other central-brain types | 330 | **20.6%** |
+
+**Most of the apparent gap was power.** Given enough cells, a fifth of ordinary
+central-brain types also split their descending output by hemisphere, so the metric
+is substantially detecting lateralisation, as first suspected. The central complex is
+still higher, but modestly, and the tests are not independent (each type is tested
+against many descending pairs), so no p-value is attached to the difference. Of the 222 strongest splits, 156 cross to the
 contralateral descending neuron and 66 stay ipsilateral. The hits are concentrated in
 the known premotor output types (PFL1, PFL3, PFR, FR) and the fan-shaped-body columnar
 types (FC, FS). EPG, the compass neurons, also appear; that is expected rather than a
 discovery, since EPG feeds PFL3 and its side-split is inherited through the very
 pathway being measured.
 
-**What it is and is not.** This is an opponent structure, and it is exactly the kind
-the descending-neuron line of work lacked — but it is **one axis, left versus right**,
+**What it is and is not.** Hemisphere-split output onto paired descending neurons is
+the kind of push-pull the descending-neuron line of work lacked, and the central
+complex has somewhat more of it than the rest of the central brain — but it is **one
+axis, left versus right**,
 replicated across many descending pairs. It is a two-alternative steering read-out, not
 a ten-way action selector, and nothing here shows that mushroom-body valence enters it.
 It is wiring, with predicted transmitters and no gap junctions or receptors. What it

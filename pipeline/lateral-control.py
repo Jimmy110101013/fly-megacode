@@ -93,7 +93,7 @@ for ty, cl in by.items():
         if (s2 > 0).sum() < 3 or (s2 < 0).sum() < 3 or s.std() == 0: continue
         r = abs(np.corrcoef(s2, s)[0, 1])
         null = np.array([abs(np.corrcoef(rng.permutation(s2), s)[0, 1]) for _ in range(PERMS)])
-        tests.append((ty, d, r, (np.sum(null >= r) + 1) / (PERMS + 1)))
+        tests.append((ty, d, r, (np.sum(null >= r) + 1) / (PERMS + 1), int(live.sum())))
 p = np.array([x[3] for x in tests]); m = len(p)
 order = np.argsort(p); q = np.empty(m); prev = 1.0
 for rank, k in enumerate(order[::-1]):
@@ -103,6 +103,9 @@ hit = q < 0.05
 # different numbers of tests. The raw rate below does not depend on the pool size.
 raw = float((p <= 0.001).mean())
 print(f"  raw p <= 0.001 (independent of how many tests were run): {int((p <= 0.001).sum())} of {m} = {raw*100:.1f}%")
+nlive = np.array([x[4] for x in tests]); big = nlive >= 12
+print(f"  cells per test: median {int(np.median(nlive))}; tests with >= 12 cells: {int(big.sum())}, "
+      f"raw p <= 0.001 among them: {(p[big] <= 0.001).mean()*100:.1f}%")
 types_hit = {tests[k][0] for k in range(m) if hit[k]}
 types_tested = {x[0] for x in tests}
 print(f"non-CX central types sampled: {len(pick)}; with at least one testable DN pair: {len(types_tested)}")

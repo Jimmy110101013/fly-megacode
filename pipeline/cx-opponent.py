@@ -109,6 +109,9 @@ hits = sorted([(q[k], *tests[k]) for k in range(m) if q[k] < 0.05])
 # different numbers of tests. The raw rate below does not depend on the pool size.
 raw = float((p <= 0.001).mean())
 print(f"  raw p <= 0.001 (independent of how many tests were run): {int((p <= 0.001).sum())} of {m} = {raw*100:.1f}%")
+nlive = np.array([x[4] for x in tests]); big = nlive >= 12
+print(f"  cells per test: median {int(np.median(nlive))}; tests with >= 12 cells: {int(big.sum())}, "
+      f"raw p <= 0.001 among them: {(p[big] <= 0.001).mean()*100:.1f}%")
 print(f"  tests run: {m}  (CX types with >= 4 cells per side, DN types with one cell per side)")
 print(f"  surviving FDR q < 0.05: {len(hits)}\n")
 fam = defaultdict(list)
