@@ -69,7 +69,27 @@ def main():
                 for r, t in zip(central.root_id, central.top_nt.fillna("acetylcholine"))}
     print(f"[select] {len(central)} candidate interneurons", file=sys.stderr)
 
+    # Dopaminergic innervation of the relay layer. If MBON->relay is ever to be
+    # treated as plastic, the gate has to be anatomy, the way the mushroom body's
+    # compartments are -- not a global reinforcement signal sprayed everywhere.
+    #
+    # Two gates are extracted because they are different claims:
+    #   dan_relay  only the mushroom body's own PAM/PPL1 cells, which are the ones
+    #              that carry valence in this model. Narrow, but the signal's
+    #              identity is not assumed.
+    #   da_relay   any dopaminergic neuron in the brain. Broad, but 46.8% of relays
+    #              qualify against a 44.6% baseline over all central interneurons,
+    #              so this gate selects almost nothing and assumes that unrelated
+    #              dopaminergic populations carry this task's reward signal.
+    dan = pick(ann.cell_class.eq("DAN"))
+    dan_type = dict(zip(dan.root_id.astype(int), dan.cell_type.fillna("")))
+    dan_ids = set(dan_type)
+    da_ids = set(ann[ann.top_nt.eq("dopamine")].root_id.astype(int))
+    print(f"[select] {len(dan_ids)} mushroom-body DANs, "
+          f"{len(da_ids)} dopaminergic neurons brain-wide", file=sys.stderr)
+
     edges, mbon_cen, cen_dn = [], [], []
+    dan_cen, da_cen = [], []
     cols = ["pre_pt_root_id", "post_pt_root_id", "syn_count"]
     with pa.memory_map(str(RAW / "proofread_connections_783.feather"), "rb") as src:
         reader = ipc.open_file(src)
@@ -93,6 +113,18 @@ def main():
                     c = cen_ix.get(pi)
                     if c is not None:
                         cen_dn.append([c, j, int(w) * cen_sign[pi]])
+                c = cen_ix.get(qi)
+                if c is not None:
+                    if pi in dan_ids:
+                        # +1 for PAM (reward), -1 for PPL1 (punishment), as in the
+                        # mushroom body, so the relay gate keeps the same valence
+                        # structure the compartments have.
+                        t = dan_type[pi]
+                        pop = 1 if t.startswith("PAM") else -1 if t.startswith("PPL") else 0
+                        if pop:
+                            dan_cen.append([c, int(w), pop])
+                    if pi in da_ids:
+                        da_cen.append([c, int(w)])
 
     # Keep only interneurons that are actually on a path: driven by an MBON and
     # driving a descending neuron. Everything else is not part of this pathway.
@@ -100,6 +132,19 @@ def main():
     keep = {c: k for k, c in enumerate(sorted(on_path))}
     mbon_cen = [[i, keep[c], w] for i, c, w in mbon_cen if c in keep]
     cen_dn = [[keep[c], j, w] for c, j, w in cen_dn if c in keep]
+    # Collapse to one PAM total and one PPL1 total per relay: the gate is how much
+    # of each kind of dopamine that cell sits under, not which cell delivered it.
+    pam = {}; ppl = {}; da = {}
+    for c, w, pop in dan_cen:
+        if c in keep:
+            (pam if pop > 0 else ppl)[keep[c]] = (pam if pop > 0 else ppl).get(keep[c], 0) + w
+    for c, w in da_cen:
+        if c in keep:
+            da[keep[c]] = da.get(keep[c], 0) + w
+    print(f"[dopamine] relays under mushroom-body DANs: "
+          f"{len(set(pam) | set(ppl))}/{len(keep)} "
+          f"(PAM {len(pam)}, PPL1 {len(ppl)});  under any dopaminergic cell: "
+          f"{len(da)}/{len(keep)}", file=sys.stderr)
     print(f"[relay] {len(keep)} interneurons on a MBON->x->DN path: "
           f"{len(mbon_cen)} in, {len(cen_dn)} out, "
           f"{len({e[1] for e in cen_dn})} descending neurons reached", file=sys.stderr)
@@ -135,6 +180,9 @@ def main():
         "mbon_dn": edges,
         "mbon_relay": mbon_cen,
         "relay_dn": cen_dn,
+        "relay_pam": [[c, w] for c, w in sorted(pam.items())],
+        "relay_ppl1": [[c, w] for c, w in sorted(ppl.items())],
+        "relay_da": [[c, w] for c, w in sorted(da.items())],
         "by_mb_drive": order,
     }, separators=(",", ":")))
     print(f"[done] {p.name} = {p.stat().st_size/1e6:.1f} MB", file=sys.stderr)

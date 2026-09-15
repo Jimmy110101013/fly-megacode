@@ -30,7 +30,12 @@ export class DescendingReadout {
    * @param circuit   data/out/dn_circuit.json
    * @param nActions  how many output channels to carve out
    */
-  constructor(circuit, nActions) {
+  constructor(circuit, nActions, opts = {}) {
+    // `plastic` makes MBON -> relay modifiable. Off by default: the claim that
+    // only KC->MBON changes is the one this project can support from measurement,
+    // and this is a second, weaker claim that has to be asked for explicitly.
+    const { plastic = false, gate = 'da', lr = 0.02, recovery = 0.004 } = opts;
+    this.p = { plastic, gate, lr, recovery };
     this.nMbon = circuit.n_mbon;
     this.nActions = nActions;
     this.nRelay = circuit.n_relay;
@@ -72,6 +77,33 @@ export class DescendingReadout {
       for (let i = 0; i < v.length; i++) v[i] /= set.size;
       return v;
     });
+
+    this.rW0 = Float32Array.from(this.rW);        // the anatomical baseline to recover toward
+
+    /**
+     * Where dopamine can gate a change, taken from the connectome rather than
+     * sprayed everywhere. Two gates, because they are different claims:
+     *
+     *   'dan'  only the mushroom body's own PAM/PPL1 cells. The signal's identity
+     *          is not assumed -- but the anatomy is brutally lopsided: 451 relays
+     *          sit under PPL1 and 33 under PAM, a 14x asymmetry in the same
+     *          direction as the 16x functional one measured in the learning rule.
+     *          Expect this gate to lock the animal on its prior.
+     *   'da'   any dopaminergic neuron. 46.8% of relays qualify against a 44.6%
+     *          baseline over all central interneurons, so this is closer to "every
+     *          relay, weighted by dopamine density" than to a compartment. Say so.
+     */
+    const gateVec = (pairs) => {
+      const v = new Float32Array(this.nRelay);
+      for (const [c, w] of pairs) v[c] = w;
+      let mx = 0;
+      for (const x of v) mx = Math.max(mx, x);
+      if (mx > 0) for (let i = 0; i < v.length; i++) v[i] /= mx;
+      return v;
+    };
+    this.gatePam = gateVec(circuit.relay_pam ?? []);
+    this.gatePpl1 = gateVec(circuit.relay_ppl1 ?? []);
+    this.gateDa = gateVec(circuit.relay_da ?? []);
 
     this.relay = new Float32Array(this.nRelay);
     this.out = new Float32Array(nActions);
@@ -152,6 +184,54 @@ export class DescendingReadout {
     const k = 1 / this.scale[channel];
     for (let i = 0; i < g.length; i++) g[i] *= k;
     return g;
+  }
+
+  /** How much each relay cell drove one channel, given the last drive(). */
+  relayContribution(channel) {
+    const q = this.relayed[channel], r = this.relay;
+    const g = new Float32Array(this.nRelay);
+    for (let c = 0; c < this.nRelay; c++) if (r[c] > 0) g[c] = q[c] * r[c];
+    return g;
+  }
+
+  /**
+   * Dopamine-gated depression of MBON -> relay, the same rule the mushroom body
+   * uses one layer up: presynaptic activity, times dopamine in the postsynaptic
+   * cell, depresses -- never strengthens -- with slow recovery to the anatomical
+   * weight. Right depresses what drove the rival; wrong depresses what drove the
+   * action taken. Both arms are normalised to the same total, because the anatomy
+   * delivers them wildly unequally (see the PAM/PPL1 split above).
+   *
+   * This is a MODELLING ASSUMPTION. Plasticity at KC->MBON is measured --
+   * electrophysiology, compartment specificity, optogenetic writing, receptor
+   * block abolishing learning. None of that exists for these interneurons.
+   */
+  learn(correct, mbon, blameRelay, creditRelay) {
+    if (!this.p.plastic) return null;
+    const src = correct ? creditRelay : blameRelay;
+    const gate = this.p.gate === 'dan'
+      ? (correct ? this.gatePam : this.gatePpl1)
+      : this.p.gate === 'all' ? null : this.gateDa;
+
+    const d = new Float32Array(this.nRelay);
+    let tot = 0;
+    for (let c = 0; c < this.nRelay; c++) {
+      const v = Math.max(0, src[c]) * (gate ? gate[c] : 1);
+      d[c] = v; tot += v;
+    }
+    if (tot <= 0) return null;
+    const k = this.p.lr / tot;
+
+    let touched = 0;
+    for (let e = 0; e < this.rPre.length; e++) {
+      const c = this.rPost[e];
+      if (d[c] > 0) {
+        this.rW[e] -= k * d[c] * mbon[this.rPre[e]] * this.rW[e];
+        touched++;
+      }
+      this.rW[e] += this.p.recovery * (this.rW0[e] - this.rW[e]);
+    }
+    return { touched };
   }
 
   /** Stop tracking, and hold the set point the naive animal arrived at. */

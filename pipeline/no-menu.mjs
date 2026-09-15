@@ -33,8 +33,15 @@ const dnCircuit = JSON.parse(readFileSync(url('dn_circuit.json')));
 
 const space = makeFeatureSpace({ omitMemory: true, cxGroups: 8, cxLevels: 5 });
 
-function run(mode, seed) {
-  const output = mode === 'descending' ? new DescendingReadout(dnCircuit, ACTIONS.length) : null;
+const CONDITIONS = [
+  ['menu',        'scoring ten labelled options',      null],
+  ['fixed relay', 'descending, nothing downstream learns', { plastic: false }],
+  ['plastic, da', 'descending, MBON->relay plastic',   { plastic: true, gate: 'da' }],
+  ['plastic, DAN', 'same, gated on PAM/PPL1 only',     { plastic: true, gate: 'dan' }],
+];
+
+function run(mode, opts, seed) {
+  const output = opts ? new DescendingReadout(dnCircuit, ACTIONS.length, opts) : null;
   // The descending arm learns at a tenth the rate. It reads absolute MBON drive
   // through a fixed pathway with large anatomical weights, so the same depression
   // that nudges a menu score swings a channel ranking outright; 0.006 is where the
@@ -82,13 +89,14 @@ function run(mode, seed) {
 }
 
 console.log(`${SEEDS} seeds, ${TRAIN} training megacodes, ${EVAL} unseen evaluated greedy.`);
-console.log('Chance is 11.8%.\n');
-console.log('architecture   action comes from            accuracy');
-for (const mode of ['menu', 'descending']) {
+console.log('Chance is 11.8%. The bar for the plastic relay is 33.1% -- what the best');
+console.log('permutation of the ten channel names already scores UNTRAINED, from');
+console.log('pipeline/dn-naming.mjs. Below that, the plasticity is doing no work.\n');
+console.log('condition        what changes                            accuracy');
+for (const [mode, label, opts] of CONDITIONS) {
   const acc = [];
-  for (let s = 0; s < SEEDS; s++) acc.push(run(mode, 11 + s * 7));
+  for (let s = 0; s < SEEDS; s++) acc.push(run(mode, opts, 11 + s * 7));
   const mean = acc.reduce((a, b) => a + b, 0) / acc.length;
-  const label = mode === 'menu' ? 'scoring ten labelled options' : 'whichever descending channel wins';
-  console.log(`${mode.padEnd(14)} ${label.padEnd(28)} ${(mean * 100).toFixed(1)}%   `
+  console.log(`${mode.padEnd(16)} ${label.padEnd(40)} ${(mean * 100).toFixed(1).padStart(5)}%   `
             + `(${acc.map((a) => (a * 100).toFixed(0)).join('-')})`);
 }

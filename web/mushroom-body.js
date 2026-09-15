@@ -338,6 +338,11 @@ export class MushroomBody {
       learned: this.readout(code).learned, temp,
       blame: this.output.contribution(chosen),
       credit: this.output.contribution(rival),
+      // The same responsibility signal one layer down, for when MBON -> relay is
+      // plastic too. Snapshotted here because the relay state is overwritten by
+      // the next decision.
+      blameRelay: this.output.relayContribution(chosen),
+      creditRelay: this.output.relayContribution(rival),
     };
     return chosen;
   }
@@ -426,8 +431,13 @@ export class MushroomBody {
         this.w[p] += this.p.recovery * (this.w0[p] - this.w[p]);   // anatomical recovery
       }
     }
+    // The output pathway learns under the same dopamine, if it is plastic at all.
+    const relay = trace.blameRelay
+      ? this.output.learn(correct, trace.mbon, trace.blameRelay, trace.creditRelay)
+      : null;
+
     this.trials++;
-    return { touched, totalDelta, dopamine: correct ? 'PAM' : 'PPL1' };
+    return { touched, totalDelta, relay, dopamine: correct ? 'PAM' : 'PPL1' };
   }
 
   /**
