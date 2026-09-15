@@ -169,6 +169,51 @@ glutamate counted as inhibitory, no gap junctions, no receptors. An opponent sta
 built from recurrent loops, from the central complex, or deeper than one relay would
 not show up.
 
+## Looking in the central complex instead
+
+In Drosophila it is the central complex, not the mushroom-body-to-DN path, that is
+shown to select behaviour: PFL3 cells compare heading with goal and drive turning
+through DNa02/DNa03. The central complex has no PAM/PPL1 split, so the opponent axis
+tested is **hemisphere**. Shuffling transmitter signs instead would destroy a
+structural property of the tissue and manufacture a positive.
+
+`pipeline/cx-opponent.py`, metric fixed before running: for a CX cell type and a
+descending type with one left and one right cell, how strongly does a cell's soma side
+predict which of the two it drives harder (direct plus one central relay, signed)?
+Null: soma side labels shuffled within the type, 10,000 times.
+
+**Positive control first, and the scan only runs if it passes.**
+
+| known case | \|r\| | p |
+| --- | --- | --- |
+| PFL3 → DNa02 | 1.000 | 0.0001 |
+| PFL3 → DNa03 | 0.980 | 0.0001 |
+
+**Then every CX type × every left/right descending pair — and the same metric on
+central-brain types outside the central complex** (`pipeline/lateral-control.py`, 90
+types drawn with a fixed seed before any result was seen). Without that second row
+the scan could just be measuring that neurons are lateralised.
+
+| population | tests | raw p ≤ 0.001 | FDR q < 0.05 | types with a hit |
+| --- | --- | --- | --- | --- |
+| central complex | 644 | **27.0%** | 275 | 18 / 90 |
+| other central-brain types | 3,341 | **2.0%** | 68 | 4 / 85 |
+
+The raw rate is the comparison that matters, because FDR grows stricter with the
+number of tests and the two rows ran very different numbers. Thirteen-fold. The
+central complex's output onto descending neurons is split by hemisphere far more than
+ordinary central neurons are. Of the 222 strongest splits, 156 cross to the
+contralateral descending neuron and 66 stay ipsilateral. The hits are concentrated in
+the known premotor output types (PFL1, PFL3, PFR, FR) and the fan-shaped-body columnar
+types (FC, FS); EPG, the compass neurons, also appear, presumably through relays.
+
+**What it is and is not.** This is an opponent structure, and it is exactly the kind
+the descending-neuron line of work lacked — but it is **one axis, left versus right**,
+replicated across many descending pairs. It is a two-alternative steering read-out, not
+a ten-way action selector, and nothing here shows that mushroom-body valence enters it.
+It is wiring, with predicted transmitters and no gap junctions or receptors. What it
+does establish is where in this connectome a push-pull output stage actually is.
+
 ## Scripts
 
 ```
@@ -179,5 +224,8 @@ pipeline/dn-naming.mjs        how much of the gap is naming, how much is mixing
 pipeline/no-menu.mjs          the four-condition comparison above
 pipeline/rewire-control.mjs   degree-preserving rewiring control (written, never run)
 pipeline/dn-opponent.py       search for descending neurons that read the valence balance
+pipeline/extract_cx_out.py    central complex -> descending neurons, direct and via one relay
+pipeline/cx-opponent.py       hemisphere opponency in CX output, gated on the PFL3 positive control
+pipeline/lateral-control.py   the same metric on non-CX central types, as the negative control
 web/descending.js             the output pathway, fixed or plastic
 ```
