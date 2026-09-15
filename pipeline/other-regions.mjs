@@ -45,7 +45,7 @@ for (const f of readdirSync(dir).sort()) {
 }
 
 console.log(`${SEEDS} seeds, ${TRAIN} megacodes of training, ` +
-            `${EVAL} unseen megacodes evaluated greedy. Chance is 11.8%.\n`);
+            `${EVAL} unseen megacodes evaluated greedy. Chance is 12.5% (pipeline/chance.mjs).\n`);
 console.log('region              cells  outputs  synapses  reward/punish   mean   range');
 for (const [name, file] of entries) {
   let c;

@@ -52,7 +52,7 @@ const exploring = run(fly, EVAL, 900000, { learn: false, greedy: false });
 const greedy = run(fly, EVAL, 900000, { learn: false, greedy: true });
 
 console.log(`trained on ${TRAIN} megacodes, evaluated on ${EVAL} unseen ones\n`);
-console.log(`  chance (engine accepts ~1.2 of 10)      11.8%`);
+console.log(`  chance (pipeline/chance.mjs)          12.5%`);
 console.log(`  exploring  (softmax, temp floor ${fly.p.tempFloor})   ${(exploring.acc * 100).toFixed(1)}%`);
 console.log(`  greedy     (exploration off)            ${(greedy.acc * 100).toFixed(1)}%`);
 console.log(`  cost of keeping exploration on          ${((greedy.acc - exploring.acc) * 100).toFixed(1)} points\n`);

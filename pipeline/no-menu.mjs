@@ -89,7 +89,7 @@ function run(mode, opts, seed) {
 }
 
 console.log(`${SEEDS} seeds, ${TRAIN} training megacodes, ${EVAL} unseen evaluated greedy.`);
-console.log('Chance is 11.8%. The bar for the plastic relay is 33.1% -- what the best');
+console.log('Chance is 12.5%. The bar for the plastic relay is 33.1% -- what the best');
 console.log('permutation of the ten channel names already scores UNTRAINED, from');
 console.log('pipeline/dn-naming.mjs. Below that, the plasticity is doing no work.\n');
 console.log('condition        what changes                            accuracy');

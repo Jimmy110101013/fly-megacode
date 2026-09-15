@@ -3,7 +3,7 @@
  *
  *   node pipeline/dn-ceiling.mjs [episodes]
  *
- * The descending-neuron architecture sits at 13.7% against 11.8% chance while the
+ * The descending-neuron architecture sits at 13.7% against 12.5% chance while the
  * action-menu architecture reaches 71.1%. Before changing anything else, find out
  * WHERE the information stops being there, by putting a plain linear decoder at
  * each stage and granting it perfect learning. This is not biology -- it is a

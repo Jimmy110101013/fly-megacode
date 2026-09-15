@@ -82,4 +82,4 @@ for (const [name, build, nkc] of configs) {
               `${(mean * 100).toFixed(1).padStart(8)}%  ` +
               `${(lo * 100).toFixed(0)}-${(hi * 100).toFixed(0)}%`);
 }
-console.log('\nchance on this task: 11.8%');
+console.log('\nchance on this task: 12.5% (pipeline/chance.mjs)');

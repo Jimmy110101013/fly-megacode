@@ -59,7 +59,7 @@ for (let round = 0; round < 6; round++) run(TRAIN / 6, 1000 + round * 9999, true
 const out = run(EVAL, 900000, false, 0);
 
 console.log(`linear readout on the same ${nF} features, ${TRAIN} megacodes of training\n`);
-console.log(`  chance                      11.8%`);
+console.log(`  chance (chance.mjs)          12.5%`);
 console.log(`  mushroom body (greedy)      ~37%`);
 console.log(`  linear readout              ${(out.acc * 100).toFixed(1)}%   <- ceiling for these features\n`);
 console.log('per action:');

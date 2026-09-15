@@ -317,15 +317,16 @@ export class BrainView {
       ctx.beginPath(); ctx.moveTo(pad, y(f)); ctx.lineTo(w - pad, y(f)); ctx.stroke();
     }
 
-    // Chance: the engine accepts ~1.6 of 10 actions, so blind guessing sits here.
-    const chance = 0.159;
+    // Chance: a uniform random guesser under the real grader, measured by
+    // pipeline/chance.mjs. It was once a hand-typed 16%, which no definition gives.
+    const chance = 0.125;
     ctx.strokeStyle = MUTED;
     ctx.setLineDash([3, 4]);
     ctx.beginPath(); ctx.moveTo(pad, y(chance)); ctx.lineTo(w - pad, y(chance)); ctx.stroke();
     ctx.setLineDash([]);
     ctx.fillStyle = MUTED;
     ctx.font = '9px ui-monospace, monospace';
-    ctx.fillText('chance 16%', pad + 2, y(chance) - 4);
+    ctx.fillText('chance 12.5%', pad + 2, y(chance) - 4);
 
     if (history.length > 1) {
       const N = history.length;

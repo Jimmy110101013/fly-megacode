@@ -34,7 +34,7 @@ the whole thing out; `web/descending.js` runs it as fixed anatomy.
 
 ## It did not learn
 
-3 seeds, 2,500 training megacodes, 300 unseen scenarios evaluated greedy, chance 11.8%.
+3 seeds, 2,500 training megacodes, 300 unseen scenarios evaluated greedy, chance 12.5% (`pipeline/chance.mjs`).
 
 | condition | accuracy |
 | --- | --- |

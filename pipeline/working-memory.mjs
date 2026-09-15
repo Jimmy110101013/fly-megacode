@@ -77,7 +77,7 @@ const conditions = [
 }
 
 console.log(`${SEEDS} seeds, ${TRAIN} megacodes of training, ${EVAL} unseen evaluated ` +
-            `greedy. Chance is 11.8%.\n`);
+            `greedy. Chance is 12.5% (pipeline/chance.mjs).\n`);
 console.log('condition            channels   mean    range');
 for (const [name, space, useCX] of conditions) {
   const runs = [];

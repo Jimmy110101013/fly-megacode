@@ -107,7 +107,7 @@ const probe = rewire(dnCircuit, 1);
 console.log(`degree-preserving rewire: ${probe.swaps} accepted swaps over `
           + `${dnCircuit.mbon_relay.length} MBON->relay and ${dnCircuit.relay_dn.length} relay->DN edges`);
 console.log(`${SEEDS} seeds, ${TRAIN} training megacodes, ${EVAL} unseen evaluated greedy.`);
-console.log('Chance 11.8%; the untrained best-permutation bar is 33.1%.\n');
+console.log('Chance 12.5%; the untrained best-permutation bar is 33.1%.\n');
 console.log('wiring            MBON->relay      accuracy');
 for (const [label, mk] of [['measured', (s) => dnCircuit],
                            ['rewired', (s) => rewire(dnCircuit, 8000 + s).copy]]) {
