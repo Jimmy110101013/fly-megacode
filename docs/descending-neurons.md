@@ -1,0 +1,152 @@
+# Taking the menu away
+
+*A closed line of work. Archived here rather than deleted, with everything that was
+measured. The page still runs the menu architecture.*
+
+## The question
+
+In the model the page ships, the action is an **input**. `encode(features, action)`
+builds one Kenyon-cell code per candidate action, all ten are scored, and a softmax
+picks one. A fly has no such menu. Mushroom-body output reaches descending neurons,
+and the descending neurons are the brain's entire output to the body — roughly 1,300
+cells for everything the brain can ask the body to do.
+
+So: make the action an **output**. One state, one Kenyon-cell code, one MBON
+population response, and the action is whichever descending channel wins.
+
+## Gate: can the fly's own output wiring express ten actions?
+
+`pipeline/dn-separable.mjs`. Granting perfect learning, is each of ten channels the
+winner for *some* achievable MBON pattern?
+
+| pathway | channels reachable |
+| --- | --- |
+| direct MBON→DN only, under depression-only plasticity | **5 / 10** |
+| direct + relay interneurons | **10 / 10** |
+
+Only 31 of 96 MBONs reach a descending neuron directly. Through the relay — 1,951
+central interneurons carrying 7,916 connections in and 27,253 out — all 96 are on a
+path. That matches what is known about the pathway: most of the mushroom body's reach
+into the descending neurons is indirect.
+
+So the experiment was on, but only through the relay. `pipeline/extract_dn.py` pulls
+the whole thing out; `web/descending.js` runs it as fixed anatomy.
+
+## It did not learn
+
+3 seeds, 2,500 training megacodes, 300 unseen scenarios evaluated greedy, chance 11.8%.
+
+| condition | accuracy |
+| --- | --- |
+| menu — scoring ten labelled options | **71.1%** (79-64-71) |
+| descending — nothing downstream learns | 13.7% (23-8-10) |
+| descending — MBON→relay plastic, any-dopamine gate | 8.6% (11-9-6) |
+| descending — same, gated on PAM/PPL1 only | 11.7% (17-7-11) |
+
+The bar was **33.1%**: what the best permutation of the ten channel names already
+scores *untrained* (`pipeline/dn-naming.mjs`). Nothing came near it, so the
+degree-preserving rewiring control in `pipeline/rewire-control.mjs` was never run —
+with both arms at chance it could not have discriminated anything.
+
+## Where the information actually stops
+
+`pipeline/dn-ceiling.mjs` puts a linear decoder at each stage of the untrained
+pathway and grants it perfect learning. 13,904 decisions, chance 11.7%.
+
+| stage | inputs | decodable |
+| --- | --- | --- |
+| Kenyon-cell code, state only | 5,177 | 71.9% |
+| MBON output, anatomical weights | 96 | 70.9% |
+| descending channel drive | 10 | **67.1%** |
+
+**Nothing in the connectome destroys the answer.** Not the 41.9% overlap between
+state codes, not the 5,177 → 96 compression, not the fixed MBON→DN map. The answer is
+still there at the ten channels and the fly gets 13.7% off it.
+
+`dn-naming.mjs` splits the remaining gap:
+
+| readout | accuracy |
+| --- | --- |
+| argmax, action *k* nailed to the *k*-th descending type by anatomical rank | 12.4% |
+| argmax, best permutation of the same ten names | 33.1% |
+| full 10×10 remix of the channel drives | 67.1% |
+
+A third of the achievable performance is the **naming** alone, and ranking descending
+types by mushroom-body drive turns out to be close to the worst assignment available.
+The rest needs the channels **mixed**, which argmax over a fixed map cannot express.
+
+## Why the plastic relay made it worse
+
+Not a dead component and not an exploding one: 12.2% of the 7,916 MBON→relay edges
+moved, all of them weakened as the rule requires, 94.3% of the anatomical weight
+retained, largest single change 93.5%.
+
+The rule is the problem. **Depression-only plasticity can only subtract, and the relay
+is exactly what made 10 of 10 channels reachable.** Weakening it walks the model back
+toward the direct-only pathway, which reaches 5. Measured: channel drive spread falls
+from 2.335 to 1.866 over training.
+
+In the mushroom body, subtraction works because the compartments are an **opponent
+pair** and behaviour is *released* — depress the approach side and avoidance wins,
+depress the avoidance side and approach wins. One-directional plasticity moves the
+behaviour in both directions because the architecture supplies the opposition. A
+feedforward relay has no opposing side, so subtraction there is not a choice between
+two outcomes; it is just removing pathway.
+
+## Two anatomical results that stand on their own
+
+**The relay layer's dopamine is overwhelmingly punishment.** Of 1,951 relays, 468 sit
+under mushroom-body DANs:
+
+```
+PAM   (reward)      33
+PPL1  (punishment) 451        14x
+```
+
+PPL1 has 24 cells to PAM's 307, but projects broadly outside the lobes into CRE/SMP.
+This is the same fact as the **16× functional asymmetry** measured independently in
+the learning rule — PPL1 × blame carried 48.9 total drive where PAM × credit carried
+3.0 — and it is why equalising the two arms was necessary rather than a fudge. The
+anatomy predicted the failure mode before the failure mode was understood.
+
+**The relay layer is not specially dopaminergic.** Receiving dopaminergic input at ≥2
+synapses:
+
+| population | share |
+| --- | --- |
+| relay interneurons | 46.8% (914/1,951) |
+| **all central interneurons — baseline** | **44.6%** (10,616/23,814) |
+| Kenyon cells | 99.7% (5,160/5,177) |
+
+46.8% against a 44.6% baseline is nothing. An earlier note in this repository cited
+the raw 914 as anatomical support for treating the layer as plastic; **that reading
+was wrong** and is retracted here. Kenyon cells at 99.7% are what specific
+dopaminergic innervation actually looks like.
+
+## What would have to change
+
+The architecture needs a readout that can *mix* channels, and depression-only
+plasticity cannot build one in a feedforward layer. The ways forward all cost
+something this project has so far refused to spend:
+
+- **allow potentiation** — then it is no longer the fly's rule, and the best-evidenced
+  property of KC→MBON is gone
+- **find an opponent structure in the output pathway** — there may be one; nobody has
+  shown it, and inventing it would be the same move as inventing the naming
+- **let the fly learn the channel→action assignment** — that is the honest fix for the
+  12.4% → 33.1% half, but it is a second plastic layer with the same problem
+
+The menu architecture stays because it works and because what it assumes — that the
+candidate action is presented — is at least stated plainly rather than smuggled in.
+
+## Scripts
+
+```
+pipeline/extract_dn.py        the pathway: MBON->DN, relay interneurons, dopamine gates
+pipeline/dn-separable.mjs     can the measured wiring express ten actions at all?
+pipeline/dn-ceiling.mjs       a linear decoder at each stage: where does the answer stop?
+pipeline/dn-naming.mjs        how much of the gap is naming, how much is mixing
+pipeline/no-menu.mjs          the four-condition comparison above
+pipeline/rewire-control.mjs   degree-preserving rewiring control (written, never run)
+web/descending.js             the output pathway, fixed or plastic
+```

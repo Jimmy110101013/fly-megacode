@@ -252,6 +252,23 @@ two different reasons:
 With both fixed, shock count decodes from 16 hub readouts at 78.1% (53.8% for
 always guessing the commonest class) and epinephrine timing at 94.3% (68.4%).
 
+## Taking the menu away
+
+The action is still an **input** everywhere above: one Kenyon-cell code per candidate
+action, all ten scored. A fly has no menu. Making the action an **output** instead —
+the winner among the fly's own descending neurons — is a closed line of work, written
+up in full at [docs/descending-neurons.md](docs/descending-neurons.md). It reached
+**13.7%** against 11.8% chance where the menu reaches 71.1%, and making the relay
+layer plastic made it **worse**, for a reason worth keeping: depression-only
+plasticity can only subtract, and the relay is precisely what made all ten channels
+reachable.
+
+Two measurements from it stand whatever happens to the architecture. The answer is
+still decodable at **67.1%** from the ten descending channels, so nothing in the
+connectome destroys it. And the relay layer's mushroom-body dopamine is split **PAM 33
+/ PPL1 451** — a 14x anatomical asymmetry that predicted, before it was understood, the
+16x functional one that locked the animal on its prior.
+
 ## Other brain regions
 
 `pipeline/extract_region.py` looks for the mushroom body's shape elsewhere in the
