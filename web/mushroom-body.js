@@ -56,8 +56,12 @@ export class MushroomBody {
    * @param nActions  size of the ACLS action space
    */
   constructor(circuit, nFeatures, nActions, opts = {}) {
-    const { seed = 7, weights = 'real' } = opts;
+    const { seed = 7, weights = 'real', output = null } = opts;
     this.p = { ...DEFAULTS, ...opts };
+    // When an output pathway is supplied, the action stops being an input: the
+    // Kenyon-cell code depends on the state alone and the action is whichever
+    // descending channel wins. See web/descending.js.
+    this.output = output;
     if (!Array.isArray(this.p.groups) || !this.p.groups.length) {
       throw new Error('MushroomBody needs `groups`: pass GROUP_SPANS from acls-engine.js');
     }
@@ -293,6 +297,48 @@ export class MushroomBody {
     return { mbon, learned, value: value / Math.max(1, activeKC.length) };
   }
 
+  /**
+   * The Kenyon-cell code for a state, with no action in it. Used when the action
+   * comes out of the descending pathway instead of being scored from a menu.
+   */
+  stateCode(features) {
+    this.primeState(features);
+    return this._topK(this._stateDrive, this.kActive);
+  }
+
+  /**
+   * Decide by letting the descending neurons compete, rather than by scoring ten
+   * labelled options. One state, one Kenyon-cell code, one MBON population
+   * response; the fixed MBON -> DN pathway turns that into channel drives and the
+   * action is the channel that wins.
+   */
+  act(features, { greedy = false } = {}) {
+    const code = this.stateCode(features);
+    const { mbon } = this.readout(code);
+    const out = this.output.drive(mbon);
+
+    const temp = greedy ? 0.05 : Math.max(this.p.tempFloor, TEMP0 * Math.exp(-this.trials / 220));
+    const logits = Array.from(out, (v) => v / temp);
+    const mx = Math.max(...logits);
+    const exps = logits.map((l) => Math.exp(l - mx));
+    const tot = exps.reduce((a, b) => a + b, 0);
+    let r = this.rand() * tot, chosen = exps.length - 1;
+    for (let i = 0; i < exps.length; i++) { r -= exps[i]; if (r <= 0) { chosen = i; break; } }
+
+    // The strongest channel that is not the one taken -- what the dopamine has to
+    // push against when the action was right.
+    let rival = chosen === 0 ? 1 : 0;
+    for (let i = 0; i < out.length; i++) if (i !== chosen && out[i] > out[rival]) rival = i;
+
+    this.last = {
+      action: chosen, values: Array.from(out), activeKC: code, mbon,
+      learned: this.readout(code).learned, temp,
+      blame: this.output.contribution(chosen),
+      credit: this.output.contribution(rival),
+    };
+    return chosen;
+  }
+
   /** Evaluate every candidate action and pick one. */
   decide(features, allowed = null, { greedy = false } = {}) {
     const codes = [], values = new Float32Array(this.nActions);
@@ -334,10 +380,30 @@ export class MushroomBody {
     const dopamine = correct ? this.pamDrive : this.ppl1Drive;
     let touched = 0, totalDelta = 0;
 
+    /**
+     * With the action gone from the Kenyon-cell code there is one code per state,
+     * so dopamine can no longer be made action-specific by the code alone: which
+     * compartment it reaches has to carry that. `blame` is how much each MBON
+     * pushed the channel that was taken, `credit` how much it pushed the runner-up.
+     * Wrong -- depress what drove the action, so it drops. Right -- depress what
+     * drove its rival, so the action wins by more. Both directions are depression,
+     * which is the only thing this synapse does.
+     *
+     * The anatomical warrant is the mushroom body's own MBON -> DAN feedback; the
+     * exact form of the eligibility signal is a modelling assumption.
+     */
+    let elig = null;
+    if (trace.blame) {
+      const src = correct ? trace.credit : trace.blame;
+      let mx = 0;
+      for (let j = 0; j < src.length; j++) mx = Math.max(mx, src[j]);
+      elig = Float32Array.from(src, (v) => (mx > 0 ? Math.max(0, v) / mx : 0));
+    }
+
     for (const k of trace.activeKC) {
       for (let p = this.rowStart[k]; p < this.rowStart[k + 1]; p++) {
         const j = this.colIdx[p];
-        const d = dopamine[j];
+        const d = elig ? dopamine[j] * elig[j] : dopamine[j];
         if (d > 0) {
           const delta = -this.p.lr * d * this.w[p];
           this.w[p] += delta;
