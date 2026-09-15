@@ -139,6 +139,36 @@ something this project has so far refused to spend:
 The menu architecture stays because it works and because what it assumes — that the
 candidate action is presented — is at least stated plainly rather than smuggled in.
 
+## Is there a basal ganglia down there?
+
+Humans select actions through opponent pathways: a go route and a no-go route
+converging on each action channel. That is exactly what this line of work lacked.
+The mushroom body already has the opponent half — PPL1-owned compartments hold
+approach-driving MBONs, PAM-owned compartments avoidance-driving ones — so
+`pipeline/dn-opponent.py` looks for descending neurons wired to *read that difference*:
+approach-group MBONs pushing one way, avoidance-group MBONs the other, through direct
+or one-relay paths, signed by transmitter.
+
+The null shuffles MBON valence across the 35 MBON types, keeping left/right copies
+together.
+
+| setting | balance-like DNs | shuffled mean | shuffled 95th pct | measured beats |
+| --- | --- | --- | --- | --- |
+| top 300 DNs, \|c\| ≥ 0.6, balance ≥ 0.25, 2,000 shuffles | 42 | 38.7 | 62 | 58% |
+
+No individual descending neuron survives FDR q < 0.1. Sweeping the thresholds
+(\|c\| 0.4/0.6/0.8, balance 0.1/0.25/0.4, top 100/300/600 DNs, direct-only and
+relayed) gives "measured beats shuffled" from 14% to 96%, with one setting of 36
+above 95% — what 36 heavily overlapping settings produce by chance. The measured
+count sits a little above the shuffled mean in most settings, so there may be a
+faint lean, but nothing here is evidence of a dedicated opponent read-out.
+
+What this can and cannot rule out: it tests one signature — a descending neuron
+integrating mushroom-body valence with opposite signs — using predicted transmitters,
+glutamate counted as inhibitory, no gap junctions, no receptors. An opponent stage
+built from recurrent loops, from the central complex, or deeper than one relay would
+not show up.
+
 ## Scripts
 
 ```
@@ -148,5 +178,6 @@ pipeline/dn-ceiling.mjs       a linear decoder at each stage: where does the ans
 pipeline/dn-naming.mjs        how much of the gap is naming, how much is mixing
 pipeline/no-menu.mjs          the four-condition comparison above
 pipeline/rewire-control.mjs   degree-preserving rewiring control (written, never run)
+pipeline/dn-opponent.py       search for descending neurons that read the valence balance
 web/descending.js             the output pathway, fixed or plastic
 ```
