@@ -73,8 +73,11 @@ same rule: a piece of optic lobe reaches 55.0% against the mushroom body's 74.7%
 the script had to invent. What the mushroom body uniquely has is the teaching signal.
 
 **4. The fly's specific wiring is not being used. Its dopamine map is.**
-- Initial synaptic weights do not matter: real, shuffled and random all converge to
-  64–68%.
+- The measured synapse counts give no advantage as initial weights. After training:
+  real 74.9% (69–82%), shuffled 69.9% (64–81%), resampled 71.8% (63–75%), uniform
+  random 76.0% (67–83%), 5 seeds (`weight-controls.mjs`). Shuffled trails real by
+  5.1 points on 4 of 5 seeds, just past the bar set before the run, but random weights
+  do as well as real, so the counts themselves are not what helps.
 - Rewiring KC→MBON while keeping every cell's number of connections: 71.5% (62–78%)
   against 74.9% (69–82%), 5 seeds. A draw by a rule set before the run
   (`rewire-menu.mjs`).
@@ -111,8 +114,37 @@ Kept here on purpose.
 Everything runs in the browser. The atlas draws 5,606 traced neurons from the FlyWire
 skeletons plus the central complex; a cell lights up along its calyx→lobe axis when it
 fires, and the central complex glows by how much it is holding. Hover a region for its
-name and its role in the model, Ctrl/⌘-scroll or pinch to zoom. A second panel draws
-every KC→MBON synapse on the path just taken, thinning as dopamine depresses it.
+name and its role in the model, Ctrl/⌘-scroll or pinch to zoom; double-click returns to
+the frontal view.
+
+**Rehearsal.** Below the atlas, one row per starting rhythm (VF, pVT, PEA, asystole),
+each a fixed patient the fly never trains on. Whenever the fly has learned something new,
+it runs that patient again as it is at that moment: greedy, for up to 14 steps, learning
+nothing, with its history in a separate copy of the central complex. Each step shows the
+action taken; where the grader disagrees it is struck through, with the guideline's
+answer underneath. The fly holds no sequence anywhere. It holds what to do in a state,
+and the order comes out one step at a time as the grader changes the patient and the
+central complex keeps the record. A naive fly values every action at exactly zero, so
+its rows say "no preference yet" instead of a confident first action. One patient per
+rhythm is a sketch, not an evaluation; the evaluation is the result at the top.
+
+**Memory layer.** Switched on, every Kenyon-cell axon is drawn lobe by lobe (vertical,
+medial, peduncle) at (Σw / Σw₀)³ of that cell's KC→MBON connections there, so with the
+animal paused a trained mushroom body is visibly darker than a naive one. On top of
+that, the cells on the decision just taken light up at the same scale, which is what
+shows where this particular path has been depressed. The calyx is drawn as context
+only: it holds 3% of the connections but so much dendrite that at full brightness it
+outshone the lobes that learn. The dopamine neurons flash on every verdict: PAM if
+right, every other DAN if wrong, as in the model. Nothing brightens, because nothing in
+the model potentiates. The lobe of
+each connection is FlyWire's own per-connection neuropil label, not an estimate:
+`pipeline/extract_lobes.py` checks it edge for edge against `mb_circuit.json`, and for
+99.7% of those labels the cell's own traced axon does pass through that lobe. 27% of
+connections are labelled with a neighbouring neuropil (mostly CRE and SIP, beside the
+lobe tips) and are not drawn. It stops at lobes on purpose: the connectivity table does
+not resolve compartments, and an MBON takes dopamine from about five DAN types, so
+assigning a synapse to γ1 or γ5 would be a guess. The compartments show up where the
+DAN skeletons light, which needs no guessing.
 
 ## Run
 

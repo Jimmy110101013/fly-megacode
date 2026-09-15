@@ -81,7 +81,7 @@ h1 em{font-style:normal;color:var(--kc)}
    in-flow rule, before the synapse panel existed. Safe for the WebGL canvases too:
    atlas3d.js and scene3d.js call setSize(w, h, false), which never writes CSS size. */
 .cell canvas{position:absolute;inset:0;width:100%;height:100%;display:block}
-.cell.syn{grid-column:1/-1;min-height:clamp(230px,30vh,300px)}
+.cell.rehearsal{grid-column:1/-1;min-height:260px}
 .cell.atlas{grid-column:1/-1;min-height:clamp(340px,52vh,520px);background:#05070a}
 .atlas-ui{position:absolute;top:12px;left:14px;display:flex;flex-direction:column;
           gap:6px;z-index:2}
@@ -103,6 +103,13 @@ h1 em{font-style:normal;color:var(--kc)}
 .atlas-tip .ab{font-family:var(--mono);font-size:10px;color:var(--faint);margin-left:6px}
 .atlas-tip .role{margin-top:4px;font-size:11px;color:var(--muted)}
 .hint.nudge{color:var(--ink)}
+.mem-key{position:absolute;left:14px;bottom:34px;max-width:min(340px,calc(100% - 28px));
+         z-index:2;font-size:11px;line-height:1.5;color:var(--muted);
+         padding:7px 10px;border:1px solid var(--line);border-radius:3px;
+         background:rgba(8,11,15,.82);backdrop-filter:blur(6px)}
+.mem-key b{color:var(--ink);font-weight:600}
+.mem-key .pam{color:var(--pam)}
+.mem-key .ppl1{color:var(--ppl1)}
 .hint{position:absolute;top:14px;left:50%;transform:translateX(-50%);
       font-family:var(--mono);font-size:10px;color:var(--faint);
       letter-spacing:.08em;pointer-events:none;z-index:2}
@@ -190,10 +197,8 @@ footer .rule{height:1px;background:var(--line);margin:0 0 16px}
     <div class="cell atlas">
       <canvas id="c-atlas"></canvas>
       <div class="atlas-ui">
-        <button id="a-frontal" aria-pressed="true">Frontal</button>
-        <button id="a-dorsal" aria-pressed="false">Dorsal</button>
         <button id="a-whole" aria-pressed="false">Whole brain</button>
-        <button id="a-overlay" aria-pressed="false">Memory overlay</button>
+        <button id="a-overlay" aria-pressed="false">Memory layer</button>
         <div class="atlas-zoom">
           <button id="a-zoom-out" aria-label="Zoom out">−</button>
           <button id="a-zoom-in" aria-label="Zoom in">＋</button>
@@ -205,16 +210,22 @@ footer .rule{height:1px;background:var(--line);margin:0 0 16px}
         <div><b id="a-cells">—</b> traced neurons</div>
         <div><b id="a-segs">—</b> neurite segments</div>
         <div>redraw <b id="a-ms">—</b></div>
-        <div id="a-axes">x = medial–lateral · y = dorsal–ventral</div>
         <div><b id="a-ctx-count">—</b> neuropils</div>
       </div>
       <div class="hint" id="a-hint" hidden>drag to orbit · Ctrl/⌘ + wheel or pinch to zoom · double-click to reset</div>
+      <div class="mem-key" id="a-mem" hidden>
+        <b>Memory.</b> Every Kenyon-cell axon is drawn, lobe by lobe, only as bright as
+        what dopamine has left of its KC→MBON synapses there; the cells on the decision
+        just taken light up on top. Lobe per synapse is FlyWire's own label. Dopamine neurons flash on each verdict: <span class="pam">PAM</span> if
+        right, <span class="ppl1">PPL1</span> if wrong. Nothing brightens with
+        learning: the model has no potentiation.
+      </div>
       <div class="hemis">
         <span id="a-left">◀ left hemisphere</span>
         <span id="a-right">right hemisphere ▶</span>
       </div>
     </div>
-    <div class="cell syn"><canvas id="c-syn"></canvas></div>
+    <div class="cell rehearsal"><canvas id="c-rehearsal"></canvas></div>
     <div class="cell"><canvas id="c-mbon"></canvas></div>
     <div class="cell curve"><canvas id="c-curve"></canvas></div>
   </div>
@@ -287,6 +298,7 @@ import { MushroomBody } from './mushroom-body.js';
 import { CentralComplex } from './central-complex.js';
 import { Bay } from './scene3d.js';
 import { BrainView } from './brainview.js';
+import { Rehearsal } from './rehearsal.js';
 import { Atlas3D } from './atlas3d.js';
 
 const $ = (id) => document.getElementById(id);
@@ -353,11 +365,12 @@ const fly = new MushroomBody(circuit, space.FEATURES.length, ACTIONS.length,
 const cx = new CentralComplex(cxCircuit, { readouts: 8, seed: 11 });
 const bay = new Bay($('bay'));
 const brain = new BrainView(
-  { kcCanvas: null, mbonCanvas: $('c-mbon'), curveCanvas: $('c-curve'), synCanvas: $('c-syn') }, fly);
+  { kcCanvas: null, mbonCanvas: $('c-mbon'), curveCanvas: $('c-curve') }, fly);
+const rehearsal = new Rehearsal($('c-rehearsal'), { fly, cx, cxCircuit, space, Megacode, actions: ACTIONS });
 
 // Traced morphology is a big file and an optional layer: without it the page
 // still runs, it just has nothing anatomical to light up.
-const engram = new Float32Array(fly.nKC);
+let edgeLobe = null, memory = null;   // the memory layer's inputs, if mb_lobes.json loads
 const mbonHeat = new Float32Array(fly.nMBON);
 let atlas = null;
 try {
@@ -372,13 +385,21 @@ try {
   try { npData = await (await fetch('./neuropils.json')).json(); } catch { /* optional */ }
   let cxAtlas = null;
   try { cxAtlas = await (await fetch('./cx_atlas.json')).json(); } catch { /* optional */ }
+  let lobes = null;
+  try {
+    lobes = await (await fetch('./mb_lobes.json')).json();
+    edgeLobe = Uint8Array.from(lobes.edge_lobe, (c) => c.charCodeAt(0) - 48);
+    // A lobe file built against a different circuit would shift every connection.
+    if (edgeLobe.length !== circuit.kc_mbon.length) throw new Error('mb_lobes.json does not match mb_circuit.json');
+    memory = new Float32Array(fly.nKC * lobes.lobes.length);
+  } catch (err) { lobes = null; edgeLobe = null; console.warn('memory layer off:', err.message); }
   atlas = new Atlas3D($('c-atlas'), atlasData, {
     kc: new Map(circuit.kc.map((n, i) => [n.root_id, i])),
     mbon: new Map(circuit.mbon.map((n, i) => [n.root_id, i])),
     dan: new Map(circuit.dan.map((n, i) => [n.root_id, i])),
-  }, npData, cxAtlas);
-  // Dragging to orbit is a pointer gesture and a GPU cost; a phone gets the
-  // preset views instead.
+  }, npData, cxAtlas, lobes);
+  // Dragging to orbit is a pointer gesture and a GPU cost; a phone keeps the
+  // frontal view, and on a touch screen a drag has to stay a page scroll.
   if (viewportWidth() >= 760) {
     atlas.enableRotate();
     // A plain wheel keeps scrolling the page; say how to zoom instead of eating it.
@@ -422,7 +443,7 @@ try {
   } else {
     $('a-whole').style.display = 'none';
   }
-  atlas.engram = engram;
+  if (!atlas.hasMemory) $('a-overlay').style.display = 'none';
   atlas.mbonHeat = mbonHeat;
   $('a-cells').textContent = atlasData.neurons.length.toLocaleString();
   $('a-segs').textContent = atlas.nSeg.toLocaleString();
@@ -517,7 +538,6 @@ function decide() {
   const feats = space.encode(mc.state, mc.shockable, cx.out);
   const a = fly.decide(feats);
   const trace = fly.last.activeKC;
-  brain.before(trace);              // snapshot the path before the dopamine lands
   const res = mc.step(a);
   fly.learn(res.correct);
   cx.step(fly.last.learned);        // the fly writes what it just did into its own state
@@ -526,6 +546,7 @@ function decide() {
 
   brain.pulse(trace, res.correct);
   atlas?.fire(trace);
+  atlas?.dopamine(res.correct);
   bay.setAction(res.action, res.correct);
   bay.setRhythm(mc.state.rhythm);
   paint(res);
@@ -586,6 +607,7 @@ function frame(now) {
   bay.update(dt);
   brain.decay(dt);
   brain.render(history);
+  rehearsal.render(dt);
 
   const m = fly.last?.mbon;
   if (m) {
@@ -601,7 +623,10 @@ function frame(now) {
   atlasClock += dt;
   if (atlas && atlasClock >= atlasEvery) {
     atlasClock = 0;
-    if (atlas.overlay) { fly.engramPerKC(engram); atlas.setEngram(engram); }
+    if (atlas.overlay && edgeLobe) {
+      fly.memoryByLobe(edgeLobe, memory.length / fly.nKC, memory);
+      atlas.setMemory(memory);
+    }
     atlas.setReservoir(cx.h);
     atlas.render();
     $('a-ms').textContent = atlas.lastDraw.toFixed(1) + ' ms';
@@ -620,6 +645,7 @@ $('b-reset').onclick = () => {
   const fresh = new MushroomBody(circuit, space.FEATURES.length, ACTIONS.length,
                                  { seed: 11, groups: space.GROUP_SPANS, stateClaws: 6 });
   fly.w.set(fresh.w); fly.trials = 0;
+  rehearsal.reset();
   cx.reset();
   decisions = 0; recent = []; history = []; acc = 0; sinceSample = 0;
   $('b-train').textContent = 'Fast-train 1,500';
@@ -636,16 +662,6 @@ $('b-speed').oninput = (e) => {
   stepEvery = 1 / rate;
   $('b-speedv').textContent = rate.toFixed(1) + '/s';
 };
-const setView = (v) => {
-  if (!atlas) return;
-  atlas.setView(v);
-  $('a-axes').textContent = v === 'frontal'
-    ? 'x = medial–lateral · y = dorsal–ventral' : 'x = medial–lateral · y = anterior–posterior';
-  $('a-frontal').setAttribute('aria-pressed', String(v === 'frontal'));
-  $('a-dorsal').setAttribute('aria-pressed', String(v === 'dorsal'));
-};
-$('a-frontal')?.addEventListener('click', () => setView('frontal'));
-$('a-dorsal')?.addEventListener('click', () => setView('dorsal'));
 $('a-whole')?.addEventListener('click', (e) => {
   if (!atlas) return;
   const on = atlas.toggleContext();
@@ -656,7 +672,8 @@ $('a-overlay')?.addEventListener('click', (e) => {
   if (!atlas) return;
   const on = atlas.toggleOverlay();
   e.target.setAttribute('aria-pressed', String(on));
-  e.target.textContent = on ? 'Memory overlay · on' : 'Memory overlay';
+  e.target.textContent = on ? 'Memory layer · on' : 'Memory layer';
+  $('a-mem').hidden = !on;
 });
 addEventListener('resize', () => bay.resize());
 

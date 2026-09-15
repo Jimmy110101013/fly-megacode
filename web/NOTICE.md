@@ -29,6 +29,7 @@ entire central complex, is fixed at its measured strength.
 | `atlas-lite.json` | The same neurons simplified for phones: 67,272 polylines |
 | `cx_atlas.json` | 2,875 central-complex neurons, 57,500 polylines |
 | `neuropils.json` | 78 JFRC2NP neuropil surfaces, 50,521 vertices, 100,892 triangles |
+| `mb_lobes.json` | The lobe (VL, ML, PED, CA, or outside) of each of the 89,315 KC→MBON connections, from FlyWire's per-connection neuropil label; the eight lobe surfaces voxelised at 2 µm |
 
 Skeletons: FlyWire FAFB v783, [Zenodo 10877326](https://zenodo.org/records/10877326),
 CC BY 4.0 (multi-gigabyte parquet, reduced here by Ramer–Douglas–Peucker to
@@ -50,6 +51,7 @@ python3 -m venv .venv && ./.venv/bin/pip install numpy pandas pyarrow
 ./.venv/bin/python pipeline/extract_skeletons.py      # -> data/out/atlas.json
 ./.venv/bin/python pipeline/extract_cx_skeletons.py   # -> data/out/cx_atlas.json
 ./.venv/bin/python pipeline/extract_neuropils.py      # -> data/out/neuropils.json
+./.venv/bin/python pipeline/extract_lobes.py          # -> data/out/mb_lobes.json (reads web/)
 ```
 
 Then copy them into `web/`, `mb_circuit_both.json` landing as `mb_circuit.json`.
@@ -70,5 +72,6 @@ a86fe2185b814f0232f3edc33e35610890db1f027007bcfe252a2f201b3fb226  atlas-lite.jso
 cbd7d06e1eee5b92d79ac24d8fb17290b231b96b6a1a0e754e421caf31fc5bee  cx_atlas.json
 226581260260d7532cf8a7d00bfbc2c724a86a873f4f6d1b262fd266a1b59667  cx_circuit.json
 15bc799030e01ee192be1d3ea042c63f8f5ac66a6d6f145259216fddc3dc991a  mb_circuit.json
+d8ccf7da2882adf4d3d148e1d6a0b646d7bfc05d42e27d26e2d36b74c6b9ea0f  mb_lobes.json
 c0ecf5556fda567d0c1a1032bc69c5fe9a270cb92bfe64efdaa19dfef84c0826  neuropils.json
 ```

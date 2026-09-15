@@ -26,6 +26,18 @@ const CLASS_ALPHA = [0.012, 0.013, 0.017, 0.015, 0.009];
 // the central complex holding what has already been done.
 const FIRE_COLOR = [1.0, 0.85, 0.36];
 const HOLD_COLOR = [0.55, 0.95, 1.0];
+// The verdict colours the rest of the page uses for the two dopamine populations.
+const DOPAMINE = { pam: [0.23, 0.69, 0.94], ppl1: [1.0, 0.30, 0.43] };
+// Texture rows are wrapped at this width: a phone GPU may refuse anything wider.
+const TEX_W = 4096;
+// Memory layer: remaining strength r is drawn as alpha * MEM_GAIN * r^3. The cube is
+// there because additive overdraw compresses contrast -- a synapse at half strength
+// has to look clearly dimmer than one at baseline, not 50% of a faint glow.
+// Set once from the measured spread, not per screenshot: after 900 megacodes the
+// median lobe sits at r = 0.72-0.87 (r^3 = 0.37-0.66) and the tenth percentile at
+// 0.34-0.58, so at this gain a naive lobe is bright without saturating and a trained
+// one is visibly dimmer with nothing firing at all.
+const MEM_GAIN = 1.2;
 
 const NEUROPIL = {
   optic:     [0.24, 0.41, 0.61], olfactory: [0.20, 0.56, 0.49],
@@ -48,9 +60,15 @@ const VERT = `
 attribute float aFlow;
 attribute float aCell;
 attribute float aClass;
+attribute float aLobe;        // Kenyon-cell vertices: which lobe they sit in, else -1
 uniform sampler2D uCells;
-uniform float uCellW;
-uniform float uMode;          // 0 = firing, 1 = engram
+uniform vec2 uCellSize;
+uniform sampler2D uMem;       // remaining KC->MBON strength per Kenyon cell per lobe
+uniform vec2 uMemSize;
+uniform float uNLobes;
+uniform float uMemGain;
+uniform vec3 uDop;            // colour of the dopamine population that last fired
+uniform float uMode;          // 0 = activity, 1 = memory
 uniform float uGain;
 uniform float uNear;          // view-space depth of the nearest structure
 uniform float uRange;
@@ -66,27 +84,58 @@ const vec4 BASE = vec4(${CLASS_ALPHA.slice(0, 4).join(',')});
 const float BASE_CX = float(${CLASS_ALPHA[4]});
 const vec3 HOT  = vec3(${FIRE_COLOR.join(',')});
 const vec3 HOLD = vec3(${HOLD_COLOR.join(',')});
+const vec3 MEMC = vec3(0.62, 1.0, 0.9);       // a path cell in the memory layer: bright teal
+
+vec4 texel(sampler2D t, vec2 size, float i) {
+  return texture2D(t, vec2((mod(i, size.x) + 0.5) / size.x, (floor(i / size.x) + 0.5) / size.y));
+}
 
 void main() {
   int ci = int(aClass + 0.5);
   bool isCX = ci == 4;
   vec3 base = isCX ? CXC : ci == 0 ? KC : ci == 1 ? MBON : ci == 2 ? DAN : APL;
   float a = isCX ? BASE_CX : ci == 0 ? BASE.x : ci == 1 ? BASE.y : ci == 2 ? BASE.z : BASE.w;
+  vec3 hot = isCX ? HOLD : HOT;
 
   float lit = 0.0;
   if (aCell >= 0.0) {
-    vec4 s = texture2D(uCells, vec2((aCell + 0.5) / uCellW, 0.5));
-    if (isCX) {
-      lit = s.a;                                  // how much this cell is holding
+    vec4 s = texel(uCells, uCellSize, aCell);
+    if (ci == 2) {
+      lit = s.a;                                  // dopamine release, in both layers
+      hot = uDop;
+    } else if (isCX) {
+      lit = uMode > 0.5 ? 0.0 : s.a;              // how much this cell is holding
     } else if (uMode > 0.5) {
-      lit = s.b;                                  // engram strength
+      // Memory: brightness is what is left of this cell's output where the vertex
+      // is. Brightness, never width -- a line here is traced neurite. A lobe the
+      // cell makes no synapses in has nothing to lose and stays at baseline.
+      // The cells on the decision just taken light up for as long as their firing
+      // envelope lasts, as bright as what is left of them in each lobe; every other
+      // cell stays as faint context. Averaged over all 5,177 cells, training only
+      // dims each lobe as a whole, which says nothing about which path was punished.
+      // Added like firing rather than multiplied into the base: 78 cells at a
+      // multiple of a 0.012 base alpha do not show at all.
+      hot = MEMC;
+      float m = aLobe >= 0.0 ? texel(uMem, uMemSize, aCell * uNLobes + aLobe).r : -1.0;
+      // Context, not memory: tracts, lobes this cell makes no synapses in, and the
+      // calyx (lobe 3), which holds 3% of KC->MBON connections but so much dendrite
+      // that at full brightness it outshone every lobe that actually learns.
+      if (m < 0.0 || aLobe > 2.5) {
+        a *= 0.3;
+        lit = s.g * 0.2;
+      } else {
+        float r = clamp(m, 0.0, 1.0);
+        float r3 = r * r * r;
+        a *= uMemGain * r3;
+        lit = s.g * r3;
+      }
     } else if (s.g > 0.0) {
       // s.r is the wavefront position along the cell, s.g the envelope
       float lead = 1.0 - clamp(abs(s.r - aFlow) * 3.2, 0.0, 1.0);
       lit = aFlow <= s.r + 0.03 ? s.g * (0.34 + 0.66 * lead) : 0.0;
     }
   }
-  vColor = mix(base, isCX ? HOLD : HOT, clamp(lit * 1.4, 0.0, 1.0));
+  vColor = mix(base, hot, clamp(lit * 1.4, 0.0, 1.0));
   vec4 mv = modelViewMatrix * vec4(position, 1.0);
   // Near structures brighter than far ones: without this the projection is a
   // flat mat of lines and rotating it tells you nothing about depth.
@@ -108,13 +157,16 @@ export class Atlas3D {
    * @param indexOf  { kc: Map(root_id -> model index), mbon, dan }
    * @param neuropils parsed neuropils.json, optional
    */
-  constructor(canvas, data, indexOf, neuropils = null, cxAtlas = null) {
+  constructor(canvas, data, indexOf, neuropils = null, cxAtlas = null, lobes = null) {
     const THREE = window.THREE;
     this.THREE = THREE;
     this.canvas = canvas;
     this.data = data;
     this.np = neuropils;
     this.cxAtlas = cxAtlas;
+    this.lobes = lobes;           // parsed mb_lobes.json, optional: the memory layer needs it
+    this.dopAt = 0;
+    this.dopPAM = 1;
     this.showContext = false;
     this.view = 'frontal';
     this.overlay = false;
@@ -154,8 +206,12 @@ export class Atlas3D {
         at += len * 3;
       }
     }
-    this.coords = xyz;
-    const b = d.bbox;
+    // Drawn in the 400 nm units the neuropil and central-complex files use. The phone
+    // atlas is quantised to 500 nm, and drawn unscaled it came out 20% smaller than
+    // the lobe surfaces and the reservoir around it.
+    const s = (d.unit_nm ?? 400) / 400;
+    this.coords = s === 1 ? xyz : Float32Array.from(xyz, (v) => v * s);
+    const b = d.bbox.map((v) => v * s);
     this.center = [(b[0] + b[3]) / 2, (b[1] + b[4]) / 2, (b[2] + b[5]) / 2];
     this.radius = Math.max(b[3] - b[0], b[4] - b[1], b[5] - b[2]) / 2;
     this.flowLo = b[2]; this.flowHi = b[5];
@@ -173,19 +229,53 @@ export class Atlas3D {
       if (m !== undefined) this.mbonOf[i] = m;
     });
     this.nKCCells = Math.max(1, maxCell);
-    // The texture covers the mushroom body's cells and then the reservoir's, so
-    // one lookup serves both populations.
+    // The texture covers the Kenyon cells, then the reservoir, then the dopamine
+    // neurons, so one lookup serves all three populations.
     this.nCX = this.cxAtlas ? this.cxAtlas.neurons.length : 0;
-    this.nCells = this.nKCCells + this.nCX;
-    this.cellData = new Float32Array(this.nCells * 4);
+    this.danBase = this.nKCCells + this.nCX;
+    const dans = [];
+    n.forEach((neuron, i) => { if (neuron.c === 2) dans.push(i); });
+    // Same split the model makes: PAM is the reward arm, every other DAN the
+    // punishment arm (mushroom-body.js, _buildCompartments).
+    this.danPAM = Uint8Array.from(dans, (i) => (String(n[i].t).startsWith('PAM') ? 1 : 0));
+    dans.forEach((i, j) => { this.cellOf[i] = this.danBase + j; });
+    this.nCells = this.danBase + dans.length;
     this.firedAt = new Float64Array(this.nKCCells);
     this.counts = n.reduce((a, x) => (a[x.s] = (a[x.s] || 0) + 1, a), {});
 
     const THREE = this.THREE;
-    this.cellTex = new THREE.DataTexture(this.cellData, this.nCells, 1,
-                                         THREE.RGBAFormat, THREE.FloatType);
-    this.cellTex.magFilter = this.cellTex.minFilter = THREE.NearestFilter;
-    this.cellTex.needsUpdate = true;
+    const texture = (count) => {
+      const w = Math.min(count, TEX_W), h = Math.ceil(count / w);
+      const data = new Float32Array(w * h * 4);
+      const tex = new THREE.DataTexture(data, w, h, THREE.RGBAFormat, THREE.FloatType);
+      tex.magFilter = tex.minFilter = THREE.NearestFilter;
+      tex.needsUpdate = true;
+      return { data, tex, size: new THREE.Vector2(w, h) };
+    };
+    ({ data: this.cellData, tex: this.cellTex, size: this.cellSize } = texture(this.nCells));
+    this.nLobes = this.lobes?.lobes.length ?? 1;
+    ({ data: this.memData, tex: this.memTex, size: this.memSize } = texture(this.nKCCells * this.nLobes));
+    for (let i = 0; i < this.memData.length; i += 4) this.memData[i] = 1;   // naive: all at baseline
+  }
+
+  /** The lobe surfaces as a voxel grid, from pipeline/extract_lobes.py, or null. */
+  _lobeGrid() {
+    const g = this.lobes?.grid;
+    if (!g) return null;
+    const [nx, ny, nz] = g.dims;
+    const lab = new Uint8Array(nx * ny * nz);
+    for (let i = 0, at = 0; i < g.rle.length; i += 2) {
+      lab.fill(g.rle[i], at, at + g.rle[i + 1]);
+      at += g.rle[i + 1];
+    }
+    const step = g.unit_nm / 400, o = g.origin_nm.map((v) => v / 400);
+    return (x, y, z) => {
+      const i = Math.floor((x - o[0]) / step), j = Math.floor((y - o[1]) / step);
+      const k = Math.floor((z - o[2]) / step);
+      if (i < 0 || j < 0 || k < 0 || i >= nx || j >= ny || k >= nz) return -1;
+      const L = lab[(i * ny + j) * nz + k];      // x-major: numpy's ravel of [x][y][z]
+      return L ? L - 1 : -1;
+    };
   }
 
   /** One indexed LineSegments buffer for every neurite in the atlas. */
@@ -199,7 +289,9 @@ export class Atlas3D {
     const flow = new Float32Array(nV);
     const cell = new Float32Array(nV);
     const cls = new Float32Array(nV);
+    const lobe = new Float32Array(nV).fill(-1);
     const idx = new Uint32Array(nSeg * 2);
+    const lobeAt = this._lobeGrid();
 
     const span = (this.flowHi - this.flowLo) || 1;
     const c = this.center;
@@ -217,9 +309,13 @@ export class Atlas3D {
       for (let li = d.offsets[n]; li < d.offsets[n + 1]; li++) {
         const len = d.plens[li];
         for (let k = 0; k < len; k++) {
-          cell[vAt + k] = cellId;
-          cls[vAt + k] = klass;
-          if (k) { idx[iAt++] = vAt + k - 1; idx[iAt++] = vAt + k; }
+          const v = vAt + k;
+          cell[v] = cellId;
+          cls[v] = klass;
+          if (lobeAt && klass === 0) {
+            lobe[v] = lobeAt(this.coords[v * 3], this.coords[v * 3 + 1], this.coords[v * 3 + 2]);
+          }
+          if (k) { idx[iAt++] = v - 1; idx[iAt++] = v; }
         }
         vAt += len;
       }
@@ -230,12 +326,18 @@ export class Atlas3D {
     g.setAttribute('aFlow', new THREE.BufferAttribute(flow, 1));
     g.setAttribute('aCell', new THREE.BufferAttribute(cell, 1));
     g.setAttribute('aClass', new THREE.BufferAttribute(cls, 1));
+    g.setAttribute('aLobe', new THREE.BufferAttribute(lobe, 1));
     g.setIndex(new THREE.BufferAttribute(idx, 1));
 
     this.material = new THREE.ShaderMaterial({
       uniforms: {
         uCells: { value: this.cellTex },
-        uCellW: { value: this.nCells },
+        uCellSize: { value: this.cellSize },
+        uMem: { value: this.memTex },
+        uMemSize: { value: this.memSize },
+        uNLobes: { value: this.nLobes },
+        uMemGain: { value: MEM_GAIN },
+        uDop: { value: new THREE.Vector3(...DOPAMINE.pam) },
         uMode: { value: 0 },
         uGain: { value: 1 },
         uNear: { value: 0 },
@@ -300,6 +402,7 @@ export class Atlas3D {
     g.setAttribute('aFlow', new THREE.BufferAttribute(flow, 1));
     g.setAttribute('aCell', new THREE.BufferAttribute(cell, 1));
     g.setAttribute('aClass', new THREE.BufferAttribute(cls, 1));
+    g.setAttribute('aLobe', new THREE.BufferAttribute(new Float32Array(nV).fill(-1), 1));
     g.setIndex(new THREE.BufferAttribute(idx, 1));
     this.cxLines = new THREE.LineSegments(g, this.material);
     this.cxLines.frustumCulled = false;
@@ -418,7 +521,9 @@ export class Atlas3D {
       const dy = Math.max(-50, Math.min(50, px));
       this.zoomBy(Math.exp(-dy * 0.008), e.clientX, e.clientY);
     }, { passive: false });
-    this.canvas.addEventListener('dblclick', () => this.resetZoom());
+    // With no preset buttons, this is the only way home after orbiting: reset
+    // rotation as well as zoom, back to the frontal view the page opens on.
+    this.canvas.addEventListener('dblclick', () => this.setView('frontal'));
   }
 
   /**
@@ -585,7 +690,7 @@ export class Atlas3D {
   /* ----------------------------------------------------------- driving --- */
 
   fire(kcIndices, t = performance.now() / 1000) {
-    for (const k of kcIndices) if (k < this.nCells) this.firedAt[k] = t;
+    for (const k of kcIndices) if (k < this.nKCCells) this.firedAt[k] = t;
   }
 
   /** How much each central-complex neuron is currently holding. */
@@ -598,10 +703,25 @@ export class Atlas3D {
     }
   }
 
-  setEngram(engram) {
-    let mx = 1e-9;
-    for (let i = 0; i < engram.length && i < this.nCells; i++) mx = Math.max(mx, engram[i]);
-    for (let i = 0; i < this.nCells; i++) this.cellData[i * 4 + 2] = (engram[i] ?? 0) / mx;
+  /**
+   * Remaining strength per Kenyon cell per lobe, laid out as the model's
+   * `memoryByLobe` returns it: cell * nLobes + lobe. Absolute, not rescaled to the
+   * current maximum -- a rescale would make the first depressed synapse look as
+   * dark as a fully trained one.
+   */
+  setMemory(mem) {
+    const d = this.memData;
+    for (let i = 0; i < mem.length && i * 4 < d.length; i++) d[i * 4] = mem[i];
+    this.memTex.needsUpdate = true;
+  }
+
+  get hasMemory() { return !!this.lobes; }
+
+  /** A verdict: the reward (PAM) or the punishment population releases dopamine. */
+  dopamine(correct, t = performance.now() / 1000) {
+    this.dopAt = t;
+    this.dopPAM = correct ? 1 : 0;
+    this.material.uniforms.uDop.value.set(...(correct ? DOPAMINE.pam : DOPAMINE.ppl1));
   }
 
   render() {
@@ -617,6 +737,16 @@ export class Atlas3D {
       if (age > 2.6) { d[i * 4] = 0; d[i * 4 + 1] = 0; this.firedAt[i] = 0; continue; }
       d[i * 4] = Math.min(1, age / SWEEP);
       d[i * 4 + 1] = Math.exp(-DECAY * Math.max(0, age - SWEEP));
+    }
+    // The whole population releases together, as it does in the model: the teaching
+    // signal is one bit, not a per-compartment choice.
+    if (this.dopAt) {
+      const e = Math.exp(-1.4 * (now - this.dopAt));
+      const on = e > 0.01 ? e : 0;
+      for (let j = 0; j < this.danPAM.length; j++) {
+        d[(this.danBase + j) * 4 + 3] = this.danPAM[j] === this.dopPAM ? on : 0;
+      }
+      if (!on) this.dopAt = 0;
     }
     this.cellTex.needsUpdate = true;
 

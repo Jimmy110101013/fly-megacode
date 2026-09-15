@@ -175,6 +175,10 @@ export class MushroomBody {
     this.colIdx = new Int32Array(n);
     this.w = new Float32Array(n);
     this.w0 = new Float32Array(n);
+    // Where each `circuit.kc_mbon` entry landed in the sparse matrix, so per-edge
+    // annotations (the lobe a connection sits in) can be read against the weights.
+    this.edgeP = new Int32Array(n);
+    this.edgeKC = new Int32Array(n);
 
     const fill = new Int32Array(this.nKC);
     const real = edges.map((e) => e[2]);
@@ -195,6 +199,7 @@ export class MushroomBody {
 
     edges.forEach(([k, m], i) => {
       const p = this.rowStart[k] + fill[k]++;
+      this.edgeP[i] = p; this.edgeKC[i] = k;
       this.colIdx[p] = m;
       const v = syn[i] / mean;
       this.w[p] = v;
@@ -449,6 +454,54 @@ export class MushroomBody {
       let d = 0;
       for (let p = this.rowStart[k]; p < this.rowStart[k + 1]; p++) d += this.w0[p] - this.w[p];
       out[k] = d > 0 ? d : 0;
+    }
+    return out;
+  }
+
+  /**
+   * What is left of each Kenyon cell's output in each lobe: Σw / Σw0 over its
+   * KC->MBON connections there, 1 at the anatomical baseline, -1 where the cell has
+   * none. `edgeLobe[i]` is the lobe code of `circuit.kc_mbon[i]` (0 = outside the
+   * lobes), from pipeline/extract_lobes.py -- FlyWire's own per-connection label.
+   * This is what the atlas's memory layer draws.
+   */
+  memoryByLobe(edgeLobe, nLobes, out = new Float32Array(this.nKC * nLobes)) {
+    const sum = (this._lobeSum ??= new Float32Array(this.nKC * nLobes));
+    const base = (this._lobeBase ??= new Float32Array(this.nKC * nLobes));
+    sum.fill(0); base.fill(0);
+    for (let i = 0; i < edgeLobe.length; i++) {
+      const L = edgeLobe[i];
+      if (!L) continue;
+      const slot = this.edgeKC[i] * nLobes + L - 1, p = this.edgeP[i];
+      sum[slot] += this.w[p]; base[slot] += this.w0[p];
+    }
+    for (let s = 0; s < out.length; s++) out[s] = base[s] > 0 ? sum[s] / base[s] : -1;
+    return out;
+  }
+
+  /**
+   * Reward and punishment memory for every candidate action in one state, split the
+   * way the decision reads it. `reward` (out[2a]) is how far PAM has depressed the
+   * avoidance side of the action's Kenyon-cell code, `punishment` (out[2a+1]) how far
+   * PPL1 has depressed the approach side, both per Kenyon cell, so reward − punishment
+   * is exactly the `value` that `decide` compares. Reads the weights and changes
+   * nothing but scratch buffers, which is what lets the rehearsal panel run the fly on
+   * a patient without disturbing the live animal.
+   */
+  memorySplit(features, out = new Float32Array(this.nActions * 2)) {
+    this.primeState(features);
+    for (let a = 0; a < this.nActions; a++) {
+      const code = this.encode(features, a, true);
+      let reward = 0, punishment = 0;
+      for (const k of code) {
+        for (let p = this.rowStart[k]; p < this.rowStart[k + 1]; p++) {
+          const d = this.w0[p] - this.w[p];
+          if (this.mbonSign[this.colIdx[p]] > 0) punishment += d; else reward += d;
+        }
+      }
+      const n = Math.max(1, code.length);
+      out[a * 2] = reward / n;
+      out[a * 2 + 1] = punishment / n;
     }
     return out;
   }
