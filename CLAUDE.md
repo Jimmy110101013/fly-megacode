@@ -101,8 +101,15 @@ fourth without saying so out loud.
 - **Decodability probes separate two hypotheses.** `cx-decodable.mjs` asks whether the
   history is in the reservoir at all, which distinguishes "not held" from "held but
   unreadable".
-- **Negative results stay in the repo.** Glomerular claw sampling made things worse and
-  is still in `mushroom-body.js` as a documented option.
+- **Negative results that bear on the README's claims stay in the README.** Glomerular
+  claw sampling made things worse and is still in `mushroom-body.js` as a documented
+  option.
+
+## Experiment records stay local
+
+Exploratory probe scripts, result tables and write-ups go in `lab/`, which is excluded
+through `.git/info/exclude`. **Do not commit or push them.** Only changes to the published
+project — the page, the model, README-level results — go to GitHub, and only when asked.
 
 ## Style
 
