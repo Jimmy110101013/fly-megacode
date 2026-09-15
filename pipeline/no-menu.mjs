@@ -35,8 +35,13 @@ const space = makeFeatureSpace({ omitMemory: true, cxGroups: 8, cxLevels: 5 });
 
 function run(mode, seed) {
   const output = mode === 'descending' ? new DescendingReadout(dnCircuit, ACTIONS.length) : null;
+  // The descending arm learns at a tenth the rate. It reads absolute MBON drive
+  // through a fixed pathway with large anatomical weights, so the same depression
+  // that nudges a menu score swings a channel ranking outright; 0.006 is where the
+  // rate sweep in the commit history puts it.
   const fly = new MushroomBody(circuit, space.FEATURES.length, ACTIONS.length,
-                               { seed, groups: space.GROUP_SPANS, stateClaws: 6, output });
+                               { seed, groups: space.GROUP_SPANS, stateClaws: 6, output,
+                                 lr: output ? 0.006 : 0.06 });
   const cx = new CentralComplex(cxCircuit, { readouts: 8, seed });
 
   const episode = (e, greedy) => {

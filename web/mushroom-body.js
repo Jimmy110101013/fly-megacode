@@ -38,6 +38,9 @@ const DEFAULTS = {
   tempFloor: 0.06,   // softmax never anneals below this, so a little exploring never stops
 };
 const TEMP0 = 1.4;          // softmax temperature, annealed
+// Total dopamine delivered per update once the two arms are equalised. Chosen so
+// one event moves a channel by a fraction of the drive spread, not all of it.
+const NORMALISED = 6.0;
 
 function rng(seed) {
   let s = seed >>> 0 || 1;
@@ -395,15 +398,25 @@ export class MushroomBody {
     let elig = null;
     if (trace.blame) {
       const src = correct ? trace.credit : trace.blame;
-      let mx = 0;
-      for (let j = 0; j < src.length; j++) mx = Math.max(mx, src[j]);
-      elig = Float32Array.from(src, (v) => (mx > 0 ? Math.max(0, v) / mx : 0));
+      // The two arms must deliver the same total depression. Measured raw, PPL1 x
+      // blame carries 48.9 where PAM x credit carries 3.0 -- a 16x asymmetry, and
+      // early in training almost every trial is an error, so the punishment arm
+      // crushes the weights into a corner the reward arm cannot pull them out of.
+      // Lowering the learning rate cannot fix a ratio; it only freezes the animal
+      // on its anatomical prior sooner, which is what the sweep showed.
+      elig = new Float32Array(src.length);
+      let tot = 0;
+      for (let j = 0; j < src.length; j++) {
+        const v = dopamine[j] * Math.max(0, src[j]);
+        elig[j] = v; tot += v;
+      }
+      if (tot > 0) for (let j = 0; j < elig.length; j++) elig[j] /= tot;
     }
 
     for (const k of trace.activeKC) {
       for (let p = this.rowStart[k]; p < this.rowStart[k + 1]; p++) {
         const j = this.colIdx[p];
-        const d = elig ? dopamine[j] * elig[j] : dopamine[j];
+        const d = elig ? elig[j] * NORMALISED : dopamine[j];
         if (d > 0) {
           const delta = -this.p.lr * d * this.w[p];
           this.w[p] += delta;
