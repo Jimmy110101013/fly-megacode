@@ -72,6 +72,28 @@ h1 em{font-style:normal;color:var(--kc)}
         white-space:nowrap}
 .should b{color:var(--ecg);font-weight:400}
 
+/* ---- what this patient has had ---- */
+/* At training speed the actions go past faster than anyone can read, so the run is only
+   legible if the sequence stays on screen. Demo mode slows down and shows this; training
+   mode hides it, where it would be a blur. */
+.caselog{display:flex;align-items:center;gap:10px;padding:7px 22px;background:var(--ground);
+         border-bottom:1px solid var(--line);font-family:var(--mono);font-size:11px}
+.caselog .rhy{color:var(--ecg);font-weight:700;white-space:nowrap}
+.caselog .steps{display:flex;gap:6px;overflow-x:auto;scrollbar-width:none;min-width:0}
+.caselog .steps::-webkit-scrollbar{display:none}
+.caselog .st{white-space:nowrap;padding:2px 7px;border-radius:2px;border:1px solid var(--line);
+             color:var(--muted);background:var(--panel)}
+.caselog .st.no{color:var(--ppl1);border-color:color-mix(in srgb,var(--ppl1) 45%,transparent)}
+.caselog .st.ok{color:var(--pam);border-color:color-mix(in srgb,var(--pam) 40%,transparent)}
+.caselog .st i{font-style:normal;color:var(--faint);margin-left:5px}
+.caselog .none{color:var(--faint)}
+.modes{display:flex;gap:0;margin-right:4px}
+.modes button{border-radius:0}
+.modes button:first-child{border-radius:3px 0 0 3px}
+.modes button:last-child{border-radius:0 3px 3px 0;margin-left:-1px}
+.modes button[aria-pressed=true]{background:color-mix(in srgb,var(--pam) 20%,var(--panel-2));
+  border-color:color-mix(in srgb,var(--pam) 55%,transparent);color:#bfe4ff}
+
 /* ---- stage: the bay beside the atlas ---- */
 /* Side by side on a desktop, so a decision and the neurons behind it are on screen at
    once; stacked below that, bay first. */
@@ -218,13 +240,22 @@ footer .rule{height:1px;background:var(--line);margin:0 0 16px}
     <span class="should" id="v-should"></span>
   </div>
 
+  <div class="caselog" id="c-log">
+    <span class="rhy" id="l-rhythm">—</span>
+    <span class="steps" id="l-steps"><span class="none">what it does for this patient, in order</span></span>
+  </div>
+
   <div class="bar">
     <button class="primary" id="b-run">Start</button>
     <button id="b-step">Step</button>
     <button id="b-train">Fast-train 1,500</button>
     <button id="b-case">New case</button>
     <button id="b-reset">Forget everything</button>
-    <label class="speed">Speed
+    <span class="modes">
+      <button id="b-demo" aria-pressed="true">Demo</button>
+      <button id="b-mode-train" aria-pressed="false">Training</button>
+    </span>
+    <label class="speed" id="speed-ctl">Speed
       <input type="range" id="b-speed" min="1" max="14" step="1" value="5">
       <span id="b-speedv">1.4/s</span>
     </label>
@@ -331,7 +362,7 @@ import { MushroomBody } from './mushroom-body.js';
 import { CentralComplex } from './central-complex.js';
 import { Bay } from './scene3d.js';
 import { BrainView } from './brainview.js';
-import { Rehearsal } from './rehearsal.js';
+import { Rehearsal, SHORT } from './rehearsal.js';
 import { MemoryTape } from './memory-tape.js';
 import { Atlas3D } from './atlas3d.js';
 
@@ -510,6 +541,8 @@ function newCase() {
   mc = new Megacode(Date.now() + cases * 7919);
   cx.reset();                       // a new patient starts with a clear head
   tapeStale = true;                 // wiped on the next decision, so a finished case stays readable
+  logStale = true;
+  $('l-rhythm').textContent = mc.state.rhythm;
   cases++;
   bay.setRhythm(mc.state.rhythm);
   $('s-case').textContent = cases;
@@ -595,6 +628,7 @@ function decide() {
   bay.setAction(res.action, res.correct);
   bay.setRhythm(mc.state.rhythm);
   paint(res);
+  logStep(res, rhythm);
   if (res.done) newCase();
 }
 
@@ -705,9 +739,54 @@ $('b-reset').onclick = () => {
 $('b-speed').oninput = (e) => {
   const v = Number(e.target.value);
   const rate = 0.5 * Math.pow(1.35, v);
-  stepEvery = 1 / rate;
+  trainEvery = 1 / rate;
+  if (mode === 'training') stepEvery = trainEvery;
   $('b-speedv').textContent = rate.toFixed(1) + '/s';
 };
+
+/*
+ * Two ways to watch the same animal. Training is the old behaviour: as many megacodes
+ * as the slider allows, because what you are watching is the accuracy curve. Demo runs
+ * one decision every couple of seconds and keeps the patient's sequence on screen,
+ * because what you are watching is what the fly did about this rhythm, in what order.
+ */
+let mode = 'demo', trainEvery = stepEvery;
+const DEMO_EVERY = 1 / 0.45;          // ~2.2 s per action, enough to read the verdict
+
+function setMode(m) {
+  mode = m;
+  stepEvery = m === 'demo' ? DEMO_EVERY : trainEvery;
+  sinceStep = 0;
+  $('b-demo').setAttribute('aria-pressed', String(m === 'demo'));
+  $('b-mode-train').setAttribute('aria-pressed', String(m === 'training'));
+  // The sequence is only readable at demo speed, and the slider only means anything
+  // when the speed is the thing being chosen.
+  $('c-log').style.display = m === 'demo' ? '' : 'none';
+  $('speed-ctl').style.display = m === 'demo' ? 'none' : '';
+}
+$('b-demo').onclick = () => setMode('demo');
+$('b-mode-train').onclick = () => setMode('training');
+
+let logStale = false;
+/** One chip per decision, in order, with what the guideline wanted where they differ. */
+function logStep(res, rhythm) {
+  const steps = $('l-steps');
+  if (logStale) { steps.textContent = ''; logStale = false; }
+  if (steps.firstElementChild?.className === 'none') steps.textContent = '';
+  if (rhythm !== $('l-rhythm').textContent) $('l-rhythm').textContent = rhythm;
+
+  const chip = document.createElement('span');
+  chip.className = 'st ' + (res.correct ? 'ok' : 'no');
+  chip.textContent = SHORT[res.action] ?? res.action;
+  if (!res.correct) {
+    const want = document.createElement('i');
+    want.textContent = 'wanted ' + res.accepted.map((i) => SHORT[ACTIONS[i]] ?? ACTIONS[i]).join('/');
+    chip.appendChild(want);
+  }
+  steps.appendChild(chip);
+  steps.scrollLeft = steps.scrollWidth;      // the newest step is the one to see
+}
+setMode('demo');
 $('a-whole')?.addEventListener('click', (e) => {
   if (!atlas) return;
   const on = atlas.toggleContext();

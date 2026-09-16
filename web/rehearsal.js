@@ -20,7 +20,7 @@ import { fit, label, INK, MUTED } from './brainview.js';
 const RHYTHMS = ['VF', 'pVT', 'PEA', 'asystole'];
 const STEPS = 14;
 const TICK = 0.25;            // re-run one row per tick, so no single frame pays for all four
-const SHORT = {
+export const SHORT = {
   shock: 'shock', cpr: 'CPR', epinephrine: 'epi', amiodarone: 'amio', lidocaine: 'lido',
   access: 'IV', airway: 'airway', treat_cause: 'cause', rhythm_check: 'check',
   post_arrest_care: 'post',

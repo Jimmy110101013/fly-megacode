@@ -117,6 +117,12 @@ fires, and the central complex glows by how much it is holding. Hover a region f
 name and its role in the model, Ctrl/⌘-scroll or pinch to zoom; double-click returns to
 the frontal view.
 
+**Two speeds.** Demo takes one decision every couple of seconds and keeps the patient's
+sequence on screen: every action in order, the wrong ones in red with what the guideline
+wanted beside them. Training runs at whatever the speed slider allows and hides that
+sequence, because at training speed what is worth watching is the accuracy curve rather
+than any single decision. The animal is identical in both; only the clock changes.
+
 **Working memory layer.** The third atlas mode shows the central complex alone, the
 mushroom body dimmed to context. Each reservoir cell is coloured by its state, above or
 below rest, scaled to the 95th percentile and capped: scaled to the most active cell,
