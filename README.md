@@ -127,7 +127,7 @@ cells the mushroom body reads back are marked white. Which eight is modelled: th
 the reservoir's hub cells by in-degree, not an anatomical output. The state clears with
 every new patient.
 
-**Memory tape.** A panel under the rehearsal draws, for the current patient, what those
+**Memory tape.** A panel beside the MBON vote draws, for the current patient, what those
 eight readouts handed the Kenyon cells at every decision: one row per readout, shaded
 by the level (0–4) the feature space actually encodes, with marks where a shock,
 epinephrine or an antiarrhythmic was given. It is the fly's input, not a smoothed view
