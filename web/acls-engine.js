@@ -36,6 +36,17 @@ const CYCLE_SECONDS = 120;
 /** Deterministic PRNG so a seed reproduces a whole megacode exactly. */
 export function rng(seed) {
   let s = seed >>> 0 || 1;
+  /*
+   * Mix the seed before anything draws from it. A raw xorshift's first output is close
+   * to monotonic in its seed, and Megacode's constructor spends that first draw on the
+   * starting rhythm -- so consecutive seeds, which is how every script in pipeline/
+   * builds its scenarios, produced VF and PEA only and never once pVT or asystole.
+   * Every number this repository has published was measured on that half of the task.
+   * Three lines of avalanche cost nothing and close the trap for good.
+   */
+  s = Math.imul(s ^ (s >>> 16), 0x45d9f3b) >>> 0;
+  s = Math.imul(s ^ (s >>> 16), 0x45d9f3b) >>> 0;
+  s = (s ^ (s >>> 16)) >>> 0 || 1;
   return () => {
     s ^= s << 13; s >>>= 0;
     s ^= s >> 17;

@@ -38,7 +38,7 @@ ACLS engine (teacher)  ──state──▶  mushroom body (decides)  ──acti
   dopamine depresses the synapses of the Kenyon cells that were active, with slow
   recovery. Nothing else is trained. The central complex is a fixed reservoir.
 
-**Result:** 76.8% (71–82%) on unseen megacodes, 3 seeds, greedy, against 12.5% chance (`chance.mjs`).
+**Result:** 47.3% (37–57%) on unseen megacodes, 5 seeds, greedy, against 12.3% chance (`chance.mjs`).
 Menu architecture, the fly holding its own history — the configuration the page runs.
 
 | Real, from FlyWire FAFB v783 | Modelled |
@@ -52,13 +52,19 @@ Menu architecture, the fly holding its own history — the configuration the pag
 
 **1. Working memory can live in a network nobody trained.** Take the history away
 and the task collapses. Let the fly drive its own central complex and it recovers
-92% of the gap. (`working-memory.mjs`, 3 seeds, 2,500 megacodes)
+60% of the gap. (`working-memory.mjs`, 5 seeds, 2,500 megacodes)
 
 | who remembers | accuracy |
 | --- | --- |
-| the engine hands it over | 82.2% |
-| nobody | 17.6% |
-| the fly, in its central complex | 76.8% (71–82%) |
+| the engine hands it over | 66.6% (54–78%) |
+| nobody | 18.6% (11–32%) |
+| the fly, in its central complex | 47.3% (37–57%) |
+
+> **Results 2 to 5 have not been corrected yet.** They were measured before the
+> generator defect in [Retracted](#retracted), so their patients were VF and PEA only.
+> Each compares conditions measured the same way, so the directions should survive, but
+> the absolute numbers will move as result 1's did. They stay here, marked, until every
+> script is rerun.
 
 **2. The limit was the code, not the size of the brain.** A linear readout on the same
 features reaches 100% (`upper-bound.mjs`). Both mushroom bodies score the same as one,
@@ -108,6 +114,15 @@ Kept here on purpose.
   The honest number is the one above.
 - **A ten-point advantage for real synaptic weights** — the weight modes consumed
   different random draws. With a shared generator it disappeared.
+- **76.8% — measured on half the task.** `Megacode` spent the first draw of a raw
+  xorshift on the starting rhythm, and every script seeded its scenarios consecutively
+  (`s0 + e`). Those first draws never landed in the pVT or asystole bands, so every
+  number this repository has published was trained and evaluated on VF and PEA alone —
+  56% and 44% of patients, where the generator specifies 40/15/25/20. Mixing the seed
+  before anything draws from it fixes the generator, and the headline falls to 47.3%
+  (37–57%) over 5 seeds. Chance barely moves, 12.5% to 12.3%, so the margin over chance
+  survives; "the fly recovers 92% of the working-memory gap" does not, it recovers 60%.
+  Found by asking why the page showed 50–70% when the README claimed 77%.
 
 ## The page
 
@@ -122,6 +137,9 @@ sequence on screen: every action in order, the wrong ones in red with what the g
 wanted beside them. Training runs at whatever the speed slider allows and hides that
 sequence, because at training speed what is worth watching is the accuracy curve rather
 than any single decision. The animal is identical in both; only the clock changes.
+The header's *recent accuracy* is the mean of the last sixty decisions with learning
+still running, which is a pulse rather than a score: a sixty-decision window swings
+tens of points on its own, and it is not the quantity the result at the top reports.
 
 **Working memory layer.** The third atlas mode shows the central complex alone, the
 mushroom body dimmed to context. Each reservoir cell is coloured by its state, above or

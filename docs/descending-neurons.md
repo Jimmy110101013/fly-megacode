@@ -34,6 +34,11 @@ the whole thing out; `web/descending.js` runs it as fixed anatomy.
 
 ## It did not learn
 
+> **Not corrected yet.** These numbers were measured before the generator defect in the
+> README's *Retracted* section, so every patient here was VF or PEA — pVT and asystole
+> never appeared. Both conditions were measured the same way, so the gap between them
+> should survive a rerun; the absolute numbers will move.
+
 3 seeds, 2,500 training megacodes, 300 unseen scenarios evaluated greedy, chance 12.5% (`pipeline/chance.mjs`).
 
 | condition | accuracy |

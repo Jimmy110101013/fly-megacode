@@ -90,6 +90,13 @@ Read these before debugging. Four of the six presented as "accuracy stuck at cha
   descending architecture, driving 78 KCs down to 10 moved overlap 42% → 28% with no
   accuracy gain at all.
 
+- **A seeded generator can quietly delete half the task.** `Megacode`'s rng was a raw
+  xorshift and its first draw picks the rhythm; every script seeded scenarios
+  consecutively, so pVT and asystole never appeared in any training or evaluation set
+  and every published number described VF and PEA only. Mix a seed before anything
+  draws from it, and check the distribution your scenarios actually have rather than
+  the one the generator's source code claims.
+
 **After three failed fixes, stop and question the architecture.** Do not attempt a
 fourth without saying so out loud.
 
