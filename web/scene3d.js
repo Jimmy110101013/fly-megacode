@@ -58,6 +58,12 @@ export function ecgAt(rhythm, t) {
 
 /* ------------------------------------------------------------- scene ---- */
 
+// Everything the bay draws except the floor sits inside this box. The camera is pushed
+// back until all eight corners are in frame, so no panel shape can cut the defibrillator
+// or the monitor off the edge.
+const BAY_BOX = { min: [-3.8, 0.15, -1.6], max: [3.2, 3.0, 2.5] };
+const BASE_DIST = 7.44;     // the framing the page's old wide strip used, before any push
+
 export class Bay {
   constructor(canvas) {
     const THREE = window.THREE;
@@ -78,8 +84,11 @@ export class Bay {
     this.scene.fog = new THREE.Fog(0x07090c, 11, 26);
 
     this.camera = new THREE.PerspectiveCamera(37, 1, 0.1, 100);
-    this.camera.position.set(4.6, 3.0, 5.4);
-    this.camera.lookAt(-0.25, 1.35, 0);
+    // The camera keeps this direction and this target; only its distance changes, set
+    // by _frame() from the shape of the panel it is drawn in.
+    this.target = new THREE.Vector3(-0.25, 1.35, 0);
+    this.viewDir = new THREE.Vector3(4.6, 3.0, 5.4).sub(this.target).normalize();
+    this.camera.lookAt(this.target);
 
     this.scene.add(new THREE.AmbientLight(0x2c3644, 1.0));
     const key = new THREE.DirectionalLight(0xdbe8ff, 1.15);
@@ -212,22 +221,77 @@ export class Bay {
   _defib() {
     const THREE = this.THREE;
     const g = new THREE.Group();
-    g.add(new THREE.Mesh(new THREE.BoxGeometry(0.9, 0.62, 0.7), this._mat(0x243140)));
-    const lamp = new THREE.Mesh(new THREE.SphereGeometry(0.07, 10, 8),
+    const shell = this._mat(0x243140), trim = this._mat(0x2f3f52), darkFace = this._mat(0x11171f);
+
+    // A case with a lip and a recessed face, not one flat box: the silhouette is what
+    // makes it read as a machine at this size. Kept inside BAY_BOX so _frame() still
+    // fits it on screen.
+    const body = new THREE.Mesh(new THREE.BoxGeometry(0.92, 0.58, 0.68), shell);
+    g.add(body);
+    const lip = new THREE.Mesh(new THREE.BoxGeometry(0.96, 0.07, 0.72), trim);
+    lip.position.y = 0.3;
+    g.add(lip);
+    const foot = new THREE.Mesh(new THREE.BoxGeometry(0.86, 0.06, 0.62), darkFace);
+    foot.position.y = -0.31;
+    g.add(foot);
+
+    const face = new THREE.Mesh(new THREE.BoxGeometry(0.66, 0.4, 0.04), darkFace);
+    face.position.set(0, 0.03, 0.35);
+    g.add(face);
+    const trace = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.03, 0.01),
+      new THREE.MeshBasicMaterial({ color: C.ecg }));
+    trace.position.set(0, 0.08, 0.38);
+    g.add(trace);
+    for (let i = 0; i < 3; i++) {                        // control knobs on the face
+      const k = new THREE.Mesh(new THREE.CylinderGeometry(0.035, 0.035, 0.03, 12), trim);
+      k.rotation.x = Math.PI / 2;
+      k.position.set(-0.2 + i * 0.2, -0.11, 0.37);
+      g.add(k);
+    }
+    const handle = new THREE.Mesh(new THREE.TorusGeometry(0.13, 0.022, 8, 20, Math.PI), trim);
+    handle.position.set(0, 0.33, -0.12);
+    g.add(handle);
+
+    const lamp = new THREE.Mesh(new THREE.SphereGeometry(0.055, 12, 10),
       new THREE.MeshBasicMaterial({ color: C.amber }));
-    lamp.position.set(0, 0.38, 0.2);
+    lamp.position.set(0.3, 0.16, 0.36);
     g.add(lamp);
     this.defibLamp = lamp;
+
     g.position.set(2.7, 1.25, -1.1);
     this.scene.add(g);
 
+    // Paddles: a domed plate, a collar, an angled grip with a discharge button -- two
+    // bare cylinders read as coins. The group's position is animated, not its rotation,
+    // so everything is built plates-down and looks right docked or over the chest.
     this.paddles = new THREE.Group();
+    // A little emissive so the plate's underside is not solid black when the paddles are
+    // held over the chest, where the key light above them never reaches.
+    const metal = this._mat(0x8b96a4, { emissive: 0x2b333d });
+    const grip = this._mat(0x1b2430), button = this._mat(0xd8342a);
     for (const z of [-0.22, 0.22]) {
-      const p = new THREE.Mesh(new THREE.CylinderGeometry(0.15, 0.15, 0.07, 14), this._mat(0x8b96a4));
-      p.position.set(0, 0, z);
+      const p = new THREE.Group();
+      const plate = new THREE.Mesh(new THREE.CylinderGeometry(0.15, 0.135, 0.05, 20), metal);
+      p.add(plate);
+      const dome = new THREE.Mesh(new THREE.SphereGeometry(0.135, 16, 10), metal);
+      dome.scale.set(1, 0.32, 1);
+      dome.position.y = 0.04;
+      p.add(dome);
+      const collar = new THREE.Mesh(new THREE.CylinderGeometry(0.055, 0.075, 0.07, 12), grip);
+      collar.position.y = 0.09;
+      p.add(collar);
+      const stock = new THREE.Mesh(new THREE.CapsuleGeometry(0.048, 0.16, 6, 12), grip);
+      stock.position.set(-0.05, 0.19, 0);
+      stock.rotation.z = 0.42;                           // held at an angle, as they are
+      p.add(stock);
+      const b = new THREE.Mesh(new THREE.CylinderGeometry(0.022, 0.022, 0.02, 10), button);
+      b.rotation.z = Math.PI / 2;
+      b.position.set(0.02, 0.25, 0);
+      p.add(b);
+      p.position.z = z;
       this.paddles.add(p);
     }
-    this.paddles.position.copy(new THREE.Vector3(2.7, 1.72, -1.1));
+    this.paddles.position.copy(new THREE.Vector3(2.7, 1.66, -1.1));   // resting on the case
     this.scene.add(this.paddles);
   }
 
@@ -266,53 +330,109 @@ export class Bay {
     const cuticle = new THREE.MeshLambertMaterial({ color: 0xc98a3a });
     const dark = new THREE.MeshLambertMaterial({ color: 0x5c4220 });
 
-    const thorax = new THREE.Mesh(new THREE.SphereGeometry(0.2, 18, 14), cuticle);
-    thorax.scale.set(1.0, 0.86, 0.9);
+    // Rounded volumes rather than one ellipsoid per part: a fly at this scale reads as
+    // a toy, and the toy should still have a back, a waist and a tapering abdomen.
+    const thorax = new THREE.Mesh(new THREE.SphereGeometry(0.2, 20, 16), cuticle);
+    thorax.scale.set(1.05, 0.9, 0.95);
     f.add(thorax);
+    const notum = new THREE.Mesh(new THREE.SphereGeometry(0.15, 18, 14), cuticle);
+    notum.scale.set(1.15, 0.72, 1.0);
+    notum.position.set(-0.03, 0.09, 0);                 // the humped back
+    f.add(notum);
+    const waist = new THREE.Mesh(new THREE.SphereGeometry(0.1, 14, 12), dark);
+    waist.scale.set(0.8, 0.95, 0.95);
+    waist.position.x = -0.17;
+    f.add(waist);
 
-    const abdomen = new THREE.Mesh(new THREE.SphereGeometry(0.19, 18, 14), dark);
-    abdomen.scale.set(1.55, 0.8, 0.82);
-    abdomen.position.x = -0.32;
-    f.add(abdomen);
-    for (let i = 0; i < 3; i++) {                       // abdominal banding
-      const ring = new THREE.Mesh(new THREE.TorusGeometry(0.15 - i * 0.022, 0.012, 6, 16), cuticle);
-      ring.rotation.y = Math.PI / 2;
-      ring.position.x = -0.24 - i * 0.11;
-      f.add(ring);
-    }
+    // Four tapering segments instead of a single ellipsoid with rings painted on it.
+    // Both tones stay in the dark half: alternating dark with the bright thorax colour
+    // gave it wasp stripes, and a fruit fly's abdomen is banded much more quietly.
+    const band = new THREE.MeshLambertMaterial({ color: 0x7c5626 });
+    const SEG = [[0.145, -0.26], [0.128, -0.39], [0.102, -0.5], [0.07, -0.58]];
+    SEG.forEach(([r, x], i) => {
+      const s = new THREE.Mesh(new THREE.SphereGeometry(r, 18, 14), i % 2 ? band : dark);
+      s.scale.set(1.05, 0.86, 0.88);
+      s.position.x = x;
+      f.add(s);
+    });
 
-    const head = new THREE.Mesh(new THREE.SphereGeometry(0.135, 16, 12), cuticle);
+    const head = new THREE.Mesh(new THREE.SphereGeometry(0.135, 18, 14), cuticle);
+    head.scale.set(0.92, 1.0, 1.0);
     head.position.x = 0.2;
     f.add(head);
+    // Mouthparts, tucked under the head. Any further forward and it reads as a muzzle,
+    // which makes the whole animal look like a small mammal rather than a fly.
+    const face = new THREE.Mesh(new THREE.SphereGeometry(0.058, 14, 12), dark);
+    face.scale.set(0.45, 0.7, 0.7);
+    face.position.set(0.235, -0.085, 0);
+    f.add(face);
+
     this.eyes = [];
-    for (const z of [-0.085, 0.085]) {
-      const eye = new THREE.Mesh(new THREE.SphereGeometry(0.082, 14, 12),
+    for (const z of [-0.075, 0.075]) {
+      // A fly is mostly eye, and wrapping them around the front is the cue that still
+      // reads at the size the page draws this at. It is also the cute reading.
+      const eye = new THREE.Mesh(new THREE.SphereGeometry(0.1, 18, 14),
         new THREE.MeshBasicMaterial({ color: 0xd8342a }));
-      eye.scale.set(0.8, 1.05, 0.85);
-      eye.position.set(0.22, 0.02, z);
+      eye.scale.set(0.88, 1.0, 0.85);
+      eye.position.set(0.215, 0.035, z * 1.2);
       f.add(eye);
       this.eyes.push(eye);
+      // A highlight sphere is what makes a round eye read as round.
+      const glint = new THREE.Mesh(new THREE.SphereGeometry(0.025, 8, 8),
+        new THREE.MeshBasicMaterial({ color: 0xffd7cf }));
+      glint.position.set(0.275, 0.095, z * 1.3);
+      f.add(glint);
+      // Aristae rise from the top of the head between the eyes. Pointed forward instead,
+      // they sit either side of the mouthparts and the whole face reads as a snout.
+      const ant = new THREE.Mesh(new THREE.CapsuleGeometry(0.008, 0.09, 4, 8), dark);
+      ant.position.set(0.235, 0.16, z * 0.55);
+      ant.rotation.z = 0.32;
+      ant.rotation.x = z > 0 ? -0.28 : 0.28;
+      f.add(ant);
     }
 
+    // Each wing hangs off a hinge at its root, so flapping sweeps the tip rather than
+    // rotating the whole wing about its own middle.
     this.wings = [];
-    for (const z of [-0.1, 0.1]) {
-      const w = new THREE.Mesh(new THREE.SphereGeometry(0.29, 12, 8),
+    for (const z of [-0.07, 0.07]) {
+      const hinge = new THREE.Group();
+      hinge.position.set(-0.08, 0.12, z);
+      const w = new THREE.Mesh(new THREE.SphereGeometry(0.3, 14, 10),
         new THREE.MeshBasicMaterial({ color: C.wing, transparent: true, opacity: 0.22 }));
-      w.scale.set(1.0, 0.045, 0.34);
-      w.position.set(-0.13, 0.13, z);
-      f.add(w);
-      this.wings.push(w);
+      // Long and narrow, angled back along the body. Broad and square-on, a wing reads
+      // as a grey plate stuck to the fly rather than as a wing.
+      w.scale.set(1.0, 0.035, 0.25);
+      w.position.set(-0.22, 0.01, Math.sign(z) * 0.2);
+      w.rotation.y = -Math.sign(z) * 0.32;
+      hinge.add(w);
+      f.add(hinge);
+      this.wings.push(hinge);
     }
 
+    // Two-segment legs with a knee. update() still swings each leg by rotation.z, so
+    // the group is hinged at the hip and the segments hang inside it.
     this.legs = [];
     for (let i = 0; i < 6; i++) {
       const side = i % 2 ? 1 : -1;
-      const seg = new THREE.Mesh(new THREE.CylinderGeometry(0.014, 0.009, 0.3, 6), dark);
-      seg.position.set(0.08 - Math.floor(i / 2) * 0.16, -0.13, side * 0.14);
-      seg.rotation.x = side * 0.7;
-      seg.rotation.z = 0.35;
-      f.add(seg);
-      this.legs.push({ mesh: seg, side, row: Math.floor(i / 2) });
+      const row = Math.floor(i / 2);
+      const hip = new THREE.Group();
+      hip.position.set(0.08 - row * 0.16, -0.12, side * 0.13);
+      hip.rotation.x = side * 0.7;
+      const femur = new THREE.Mesh(new THREE.CylinderGeometry(0.016, 0.012, 0.18, 6), dark);
+      femur.position.y = -0.09;
+      hip.add(femur);
+      const knee = new THREE.Group();
+      knee.position.y = -0.18;
+      knee.rotation.z = -0.8;
+      const tibia = new THREE.Mesh(new THREE.CylinderGeometry(0.011, 0.007, 0.17, 6), dark);
+      tibia.position.y = -0.085;
+      knee.add(tibia);
+      const foot = new THREE.Mesh(new THREE.SphereGeometry(0.014, 8, 6), dark);
+      foot.position.y = -0.17;
+      knee.add(foot);
+      hip.add(knee);
+      f.add(hip);
+      this.legs.push({ mesh: hip, side, row });
     }
 
     // Dopamine halo -- flares cyan when the fly is right, red when it is wrong.
@@ -452,7 +572,7 @@ export class Bay {
     // Paddles ride with the fly while it is shocking.
     const padGoal = this.action === 'shock'
       ? f.position.clone().add(new THREE.Vector3(0, -0.3, 0))
-      : new THREE.Vector3(2.7, 1.72, -1.1);
+      : new THREE.Vector3(2.7, 1.66, -1.1);
     this.paddles.position.lerp(padGoal, Math.min(1, dt * 5));
 
     // Defibrillator charge lamp.
@@ -483,16 +603,44 @@ export class Bay {
     this.renderer.render(this.scene, this.camera);
   }
 
+  /**
+   * Set the camera's distance so the whole bay is in frame. A hand-set distance suited
+   * the wide strip the page used to be; in a half-width column it cut the defibrillator
+   * off the right edge. Widening the lens instead would distort the near end of the bed.
+   */
+  _frame() {
+    const { Vector3 } = this.THREE;
+    const cam = this.camera;
+    cam.position.copy(this.viewDir).multiplyScalar(BASE_DIST).add(this.target);
+    cam.lookAt(this.target);
+    cam.updateMatrixWorld(true);
+
+    const tanV = Math.tan((cam.fov * Math.PI) / 360), tanH = tanV * cam.aspect;
+    let push = 0;
+    for (let i = 0; i < 8; i++) {
+      // Camera space looks down -z, so a corner in front has negative z and needs the
+      // camera moved back by |x| / tan(half fov) + z before it is inside the frustum.
+      const v = cam.worldToLocal(new Vector3(
+        BAY_BOX[i & 1 ? 'max' : 'min'][0],
+        BAY_BOX[i & 2 ? 'max' : 'min'][1],
+        BAY_BOX[i & 4 ? 'max' : 'min'][2]));
+      push = Math.max(push, Math.abs(v.x) / tanH + v.z, Math.abs(v.y) / tanV + v.z);
+    }
+    if (push > 0) cam.position.addScaledVector(this.viewDir, push * 1.04);
+    cam.lookAt(this.target);
+
+    // The fog was tuned as a depth behind the patient, not as an absolute distance.
+    const d = cam.position.distanceTo(this.target);
+    this.scene.fog.near = d + 3.6;
+    this.scene.fog.far = d + 18.6;
+  }
+
   resize() {
     const r = this.canvas.getBoundingClientRect();
     const w = Math.max(1, r.width), h = Math.max(1, r.height);
     this.renderer.setSize(w, h, false);
     this.camera.aspect = w / h;
-    // The bay is framed for a wide strip. In a narrower box keep the horizontal field
-    // of view instead of the vertical one, or the bed and the fly are cut at the sides.
-    const REF_ASPECT = 1.6, VFOV = 37;
-    const t = Math.tan((VFOV * Math.PI) / 360) * Math.max(1, REF_ASPECT / this.camera.aspect);
-    this.camera.fov = (Math.atan(t) * 360) / Math.PI;
     this.camera.updateProjectionMatrix();
+    this._frame();
   }
 }
