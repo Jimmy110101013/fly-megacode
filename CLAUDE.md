@@ -97,6 +97,17 @@ Read these before debugging. Four of the six presented as "accuracy stuck at cha
   draws from it, and check the distribution your scenarios actually have rather than
   the one the generator's source code claims.
 
+- **Evaluating mid-run changes the animal.** `decide()` draws from the fly's own PRNG
+  even when greedy, so a probe that evaluates between training blocks shifts every
+  later draw and trains a different fly. Two scripts that differed only in that gave
+  0% and 17% shock rates from the same seed, and two hours went into deciding which
+  one had the bug. Neither did. Evaluate on a copy, or at the end.
+- **This task has more than one attractor.** Of eight flies trained identically, three
+  learn never to shock and five shock whenever it is called for, with nothing in
+  between — and both groups land at the same accuracy, 51.2% against 49.6%. A mean
+  over seeds can describe a population no individual belongs to, so look at the
+  per-seed column before believing the mean.
+
 **After three failed fixes, stop and question the architecture.** Do not attempt a
 fourth without saying so out loud.
 

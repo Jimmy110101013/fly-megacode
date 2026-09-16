@@ -160,6 +160,14 @@ decision. Expect the rows to climb together as the case goes on, several nearly
 identical; whatever shock history they hold shows as the smaller differences between
 them.
 
+**Why it chose that.** The fly scores all ten candidate actions before committing to one,
+and the page used to show only the commitment. This panel draws the scores: a bar per
+action, longest first, the one taken filled in, a tick on each action the grader would
+have accepted, and the lead over the runner-up as a number. It is the difference between
+"it was wrong" and "it ranked the guideline's answer eighth out of ten" — and between a
+confident mistake and a near-tie the softmax lost, which at the annealed temperature is
+where nearly every departure from its own top pick happens.
+
 **Rehearsal.** Below the atlas, one row per starting rhythm (VF, pVT, PEA, asystole),
 each a fixed patient the fly never trains on. Whenever the fly has learned something new,
 it runs that patient again as it is at that moment: greedy, for up to 14 steps, learning

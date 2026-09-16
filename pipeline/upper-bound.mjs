@@ -59,8 +59,11 @@ for (let round = 0; round < 6; round++) run(TRAIN / 6, 1000 + round * 9999, true
 const out = run(EVAL, 900000, false, 0);
 
 console.log(`linear readout on the same ${nF} features, ${TRAIN} megacodes of training\n`);
-console.log(`  chance (chance.mjs)          12.5%`);
-console.log(`  mushroom body (greedy)      ~37%`);
+// The two comparison figures used to be printed here as literals, which is how a
+// number survives the measurement that made it false: they still read 12.5% and ~37%
+// after the generator fix moved both. Whatever this script prints, it computes.
+console.log(`  chance and the mushroom body's own score: see the README, measured by`);
+console.log(`  chance.mjs and working-memory.mjs rather than typed in here`);
 console.log(`  linear readout              ${(out.acc * 100).toFixed(1)}%   <- ceiling for these features\n`);
 console.log('per action:');
 [...out.per.entries()].sort((a, b) => b[1][1] - a[1][1]).forEach(([a, [r, n]]) =>

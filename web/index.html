@@ -154,6 +154,7 @@ h1 em{font-style:normal;color:var(--kc)}
    the accuracy curve, which only grows, gets the full width. */
 .cell.tape{min-height:200px}
 .cell.curve{grid-column:1/-1}
+.cell.why{grid-column:1/-1;min-height:250px}
 /* Under the counts, right-aligned: centred at the top it wrapped into them once the
    atlas became a half-width column. */
 .hint{position:absolute;top:50px;right:14px;white-space:nowrap;
@@ -311,6 +312,7 @@ footer .rule{height:1px;background:var(--line);margin:0 0 16px}
   </div>
 
   <div class="brain">
+    <div class="cell why"><canvas id="c-why"></canvas></div>
     <div class="cell rehearsal"><canvas id="c-rehearsal"></canvas></div>
     <div class="cell curve"><canvas id="c-curve"></canvas></div>
     <div class="cell"><canvas id="c-mbon"></canvas></div>
@@ -363,6 +365,7 @@ import { CentralComplex } from './central-complex.js';
 import { Bay } from './scene3d.js';
 import { BrainView } from './brainview.js';
 import { Rehearsal, SHORT } from './rehearsal.js';
+import { ActionValues } from './action-values.js';
 import { MemoryTape } from './memory-tape.js';
 import { Atlas3D } from './atlas3d.js';
 
@@ -432,6 +435,8 @@ const bay = new Bay($('bay'));
 const brain = new BrainView(
   { kcCanvas: null, mbonCanvas: $('c-mbon'), curveCanvas: $('c-curve') }, fly);
 const rehearsal = new Rehearsal($('c-rehearsal'), { fly, cx, cxCircuit, space, Megacode, actions: ACTIONS });
+// The scores behind the decision the verdict strip reports.
+const why = new ActionValues($('c-why'), { actions: ACTIONS, pretty: PRETTY });
 const tape = new MemoryTape($('c-tape'), {
   readouts: cx.readout.length,
   levels: space.groups.find((g) => g.cx === 0)?.channels.length ?? 5,
@@ -614,6 +619,8 @@ function decide() {
   const trace = fly.last.activeKC;
   const rhythm = mc.state.rhythm;
   const res = mc.step(a);
+  // Before learn(): fly.last still holds the scores this decision was made from.
+  why.record(fly.last.values, a, res.accepted, res.correct);
   if (tapeStale) { tape.reset(); tapeStale = false; }
   tape.record(cx.out, res.action, rhythm);   // what the Kenyon cells were given for this one
   fly.learn(res.correct);
@@ -688,6 +695,7 @@ function frame(now) {
   brain.render(history);
   rehearsal.render(dt);
   tape.render();
+  why.render();
 
   const m = fly.last?.mbon;
   if (m) {
@@ -726,6 +734,7 @@ $('b-reset').onclick = () => {
                                  { seed: 11, groups: space.GROUP_SPANS, stateClaws: 6 });
   fly.w.set(fresh.w); fly.trials = 0;
   rehearsal.reset();
+  why.reset();
   cx.reset();
   decisions = 0; recent = []; history = []; acc = 0; sinceSample = 0;
   $('b-train').textContent = 'Fast-train 1,500';
